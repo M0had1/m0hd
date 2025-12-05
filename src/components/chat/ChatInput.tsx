@@ -4,14 +4,17 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, attachments?: File[]) => void;
   isLoading: boolean;
 }
 
 export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -20,10 +23,30 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
     }
   }, [message]);
 
+  // Generate previews for image files
+  useEffect(() => {
+    const newPreviews: string[] = [];
+    attachments.forEach((file) => {
+      if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        newPreviews.push(url);
+      } else {
+        newPreviews.push('');
+      }
+    });
+    setPreviews(newPreviews);
+
+    return () => {
+      newPreviews.forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [attachments]);
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!message.trim() || isLoading) return;
-    onSend(message);
+    if ((!message.trim() && attachments.length === 0) || isLoading) return;
+    onSend(message, attachments.length > 0 ? attachments : undefined);
     setMessage('');
     setAttachments([]);
   };
@@ -35,12 +58,44 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setAttachments((prev) => [...prev, ...files].slice(0, 10)); // Max 10 files
+    }
+    e.target.value = ''; // Reset input
+  };
+
   const removeAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
     <div className="border-t border-border bg-background/80 backdrop-blur-xl p-4">
+      {/* Hidden file inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+        accept=".pdf,.doc,.docx,.txt,.csv,.json,.xml,.md"
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+        accept="image/*"
+      />
+
       <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
         {/* Attachments preview */}
         {attachments.length > 0 && (
@@ -48,13 +103,41 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
             {attachments.map((file, index) => (
               <div
                 key={index}
-                className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-sm"
+                className="relative group flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-sm"
               >
-                <span className="truncate max-w-[150px]">{file.name}</span>
+                {file.type.startsWith('image/') && previews[index] ? (
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={previews[index]}
+                      alt={file.name}
+                      className="w-10 h-10 object-cover rounded"
+                    />
+                    <div className="flex flex-col">
+                      <span className="truncate max-w-[120px] text-xs font-medium">
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatFileSize(file.size)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex flex-col">
+                      <span className="truncate max-w-[120px] text-xs font-medium">
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatFileSize(file.size)}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => removeAttachment(index)}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -71,6 +154,8 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach file"
             >
               <Paperclip className="h-4 w-4" />
             </Button>
@@ -79,6 +164,8 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground hover:text-foreground"
+              onClick={() => imageInputRef.current?.click()}
+              title="Attach image"
             >
               <Image className="h-4 w-4" />
             </Button>
@@ -114,10 +201,10 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
               type="submit"
               variant="gold"
               size="icon-sm"
-              disabled={!message.trim() || isLoading}
+              disabled={(!message.trim() && attachments.length === 0) || isLoading}
               className={cn(
                 "h-8 w-8 rounded-xl transition-all",
-                message.trim() && !isLoading ? "opacity-100" : "opacity-50"
+                (message.trim() || attachments.length > 0) && !isLoading ? "opacity-100" : "opacity-50"
               )}
             >
               <Send className="h-4 w-4" />
