@@ -37,7 +37,7 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen }: ChatHeader
             <Button variant="ghost" className="h-8 px-3 text-sm">
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald animate-pulse" />
-                DeepSeek
+                Gemini Flash
               </span>
             </Button>
           </DropdownMenuTrigger>
@@ -45,19 +45,19 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen }: ChatHeader
             <DropdownMenuItem>
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald" />
-                DeepSeek Chat
+                Gemini 2.5 Flash
               </span>
             </DropdownMenuItem>
             <DropdownMenuItem disabled>
               <span className="flex items-center gap-2 text-muted-foreground">
                 <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                GPT-4 (Coming soon)
+                GPT-5 (Coming soon)
               </span>
             </DropdownMenuItem>
             <DropdownMenuItem disabled>
               <span className="flex items-center gap-2 text-muted-foreground">
                 <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                Claude 3 (Coming soon)
+                Gemini Pro (Coming soon)
               </span>
             </DropdownMenuItem>
           </DropdownMenuContent>
