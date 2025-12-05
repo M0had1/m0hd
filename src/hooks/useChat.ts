@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Message, Conversation } from '@/types/chat';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -54,6 +56,10 @@ export const useChat = () => {
       timestamp: new Date(),
     };
 
+    // Get current messages for API call
+    const currentConversation = conversations.find(c => c.id === conversationId);
+    const previousMessages = currentConversation?.messages || [];
+
     // Add user message
     setConversations(prev =>
       prev.map(conv =>
@@ -92,21 +98,77 @@ export const useChat = () => {
       )
     );
 
-    // Simulate streaming response (will be replaced with actual API call)
-    const sampleResponses = [
-      "Hello! I'm Mohamed's AI, your intelligent assistant. I'm here to help you with any questions, creative tasks, coding challenges, or just have a thoughtful conversation. What would you like to explore today?",
-      "That's a great question! Let me think about this carefully and provide you with a comprehensive answer...\n\nBased on my analysis, here are the key points to consider:\n\n1. **Understanding the Context**: It's important to first understand the full scope of what you're asking.\n\n2. **Breaking Down the Problem**: Complex questions often benefit from being broken into smaller, manageable parts.\n\n3. **Providing Solutions**: Once we understand the problem, we can work together to find the best approach.\n\nIs there a specific aspect you'd like me to elaborate on?",
-      "I'd be happy to help you with that! Here's a detailed breakdown:\n\n```javascript\n// Example code snippet\nconst greet = (name) => {\n  return `Hello, ${name}! Welcome to Mohamed's AI.`;\n};\n\nconsole.log(greet('User'));\n```\n\nThis demonstrates how we can create elegant solutions together. Would you like me to explain any part in more detail?",
-    ];
+    try {
+      // Prepare messages for API
+      const apiMessages = [
+        ...previousMessages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user' as const, content }
+      ];
 
-    const response = sampleResponses[Math.floor(Math.random() * sampleResponses.length)];
-    
-    // Simulate streaming
-    let currentContent = '';
-    for (let i = 0; i < response.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 15));
-      currentContent += response[i];
-      
+      // Call the edge function with streaming
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ messages: apiMessages }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (content) {
+                  fullContent += content;
+                  
+                  setConversations(prev =>
+                    prev.map(conv =>
+                      conv.id === conversationId
+                        ? {
+                            ...conv,
+                            messages: conv.messages.map(msg =>
+                              msg.id === assistantMessageId
+                                ? { ...msg, content: fullContent }
+                                : msg
+                            ),
+                          }
+                        : conv
+                    )
+                  );
+                }
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
+      }
+
+      // Mark streaming as complete
       setConversations(prev =>
         prev.map(conv =>
           conv.id === conversationId
@@ -114,7 +176,30 @@ export const useChat = () => {
                 ...conv,
                 messages: conv.messages.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, content: currentContent }
+                    ? { ...msg, isStreaming: false }
+                    : msg
+                ),
+              }
+            : conv
+        )
+      );
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to send message',
+        variant: 'destructive',
+      });
+      
+      // Update message with error state
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                messages: conv.messages.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: 'Sorry, there was an error processing your request. Please try again.', isStreaming: false }
                     : msg
                 ),
               }
@@ -123,24 +208,8 @@ export const useChat = () => {
       );
     }
 
-    // Mark streaming as complete
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              messages: conv.messages.map(msg =>
-                msg.id === assistantMessageId
-                  ? { ...msg, isStreaming: false }
-                  : msg
-              ),
-            }
-          : conv
-      )
-    );
-
     setIsLoading(false);
-  }, [activeConversationId, createNewConversation]);
+  }, [activeConversationId, createNewConversation, conversations]);
 
   return {
     conversations,
