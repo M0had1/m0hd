@@ -1,0 +1,183 @@
+import { User, Bot, Copy, Check, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Message } from '@/types/chat';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+interface ChatMessageProps {
+  message: Message;
+  onRegenerate?: () => void;
+}
+
+export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
+  const [copied, setCopied] = useState(false);
+  const isUser = message.role === 'user';
+
+  const copyToClipboard = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatContent = (content: string) => {
+    // Basic markdown-like formatting
+    return content
+      .split('\n')
+      .map((line, i) => {
+        // Code blocks
+        if (line.startsWith('```')) {
+          return null; // Handle separately
+        }
+        // Headers
+        if (line.startsWith('### ')) {
+          return <h3 key={i} className="font-semibold text-base mt-4 mb-2">{line.slice(4)}</h3>;
+        }
+        if (line.startsWith('## ')) {
+          return <h2 key={i} className="font-semibold text-lg mt-4 mb-2">{line.slice(3)}</h2>;
+        }
+        if (line.startsWith('# ')) {
+          return <h1 key={i} className="font-bold text-xl mt-4 mb-2">{line.slice(2)}</h1>;
+        }
+        // Bold text
+        const boldRegex = /\*\*(.*?)\*\*/g;
+        const parts = line.split(boldRegex);
+        if (parts.length > 1) {
+          return (
+            <p key={i} className="mb-2">
+              {parts.map((part, j) =>
+                j % 2 === 1 ? <strong key={j}>{part}</strong> : part
+              )}
+            </p>
+          );
+        }
+        // Lists
+        if (line.startsWith('- ') || line.match(/^\d+\. /)) {
+          return <li key={i} className="ml-4 mb-1">{line.replace(/^-\s|^\d+\.\s/, '')}</li>;
+        }
+        // Empty lines
+        if (!line.trim()) {
+          return <br key={i} />;
+        }
+        return <p key={i} className="mb-2">{line}</p>;
+      });
+  };
+
+  // Extract code blocks
+  const renderContent = () => {
+    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(message.content)) !== null) {
+      // Add text before code block
+      if (match.index > lastIndex) {
+        parts.push(
+          <div key={lastIndex} className="prose-chat">
+            {formatContent(message.content.slice(lastIndex, match.index))}
+          </div>
+        );
+      }
+
+      // Add code block
+      const language = match[1] || 'code';
+      const code = match[2].trim();
+      parts.push(
+        <div key={match.index} className="my-3 rounded-lg bg-navy-darker overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 bg-navy-dark/50 border-b border-border/20">
+            <span className="text-xs text-muted-foreground font-mono">{language}</span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              onClick={() => navigator.clipboard.writeText(code)}
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
+          <pre className="p-4 overflow-x-auto">
+            <code className="text-sm font-mono text-emerald-light">{code}</code>
+          </pre>
+        </div>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < message.content.length) {
+      parts.push(
+        <div key={lastIndex} className="prose-chat">
+          {formatContent(message.content.slice(lastIndex))}
+        </div>
+      );
+    }
+
+    return parts.length > 0 ? parts : <div className="prose-chat">{formatContent(message.content)}</div>;
+  };
+
+  return (
+    <div
+      className={cn(
+        "group flex gap-4 px-4 py-6 animate-fade-in",
+        isUser ? "bg-transparent" : "bg-muted/30"
+      )}
+    >
+      {/* Avatar */}
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+          isUser
+            ? "bg-gradient-navy text-primary-foreground"
+            : "bg-gradient-gold text-navy-dark"
+        )}
+      >
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-sm">
+            {isUser ? 'You' : "Mohamed's AI"}
+          </span>
+          {message.isStreaming && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="animate-typing">●</span>
+              <span className="animate-typing" style={{ animationDelay: '0.2s' }}>●</span>
+              <span className="animate-typing" style={{ animationDelay: '0.4s' }}>●</span>
+            </span>
+          )}
+        </div>
+
+        <div className="text-foreground">
+          {renderContent()}
+        </div>
+
+        {/* Actions */}
+        {!isUser && !message.isStreaming && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-7 w-7"
+              onClick={copyToClipboard}
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald" /> : <Copy className="h-3 w-3" />}
+            </Button>
+            {onRegenerate && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-7 w-7"
+                onClick={onRegenerate}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
