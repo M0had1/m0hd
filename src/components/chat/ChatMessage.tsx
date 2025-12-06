@@ -1,4 +1,4 @@
-import { User, Bot, Copy, Check, RefreshCw } from 'lucide-react';
+import { User, Bot, Copy, Check, RefreshCw, FileText, Image as ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
@@ -69,12 +69,20 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
     let lastIndex = 0;
     let match;
 
-    while ((match = codeBlockRegex.exec(message.content)) !== null) {
+    // Remove file content blocks from display (they were appended for the API)
+    let displayContent = message.content;
+    const fileContentRegex = /\n\n--- Content of .+? ---\n[\s\S]*?\n--- End of .+? ---\n?/g;
+    displayContent = displayContent.replace(fileContentRegex, '');
+    
+    // Also remove [Attached file: ...] markers
+    displayContent = displayContent.replace(/\n\n\[Attached file: .+?\]/g, '');
+
+    while ((match = codeBlockRegex.exec(displayContent)) !== null) {
       // Add text before code block
       if (match.index > lastIndex) {
         parts.push(
           <div key={lastIndex} className="prose-chat">
-            {formatContent(message.content.slice(lastIndex, match.index))}
+            {formatContent(displayContent.slice(lastIndex, match.index))}
           </div>
         );
       }
@@ -105,15 +113,55 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
     }
 
     // Add remaining text
-    if (lastIndex < message.content.length) {
+    if (lastIndex < displayContent.length) {
       parts.push(
         <div key={lastIndex} className="prose-chat">
-          {formatContent(message.content.slice(lastIndex))}
+          {formatContent(displayContent.slice(lastIndex))}
         </div>
       );
     }
 
-    return parts.length > 0 ? parts : <div className="prose-chat">{formatContent(message.content)}</div>;
+    return parts.length > 0 ? parts : <div className="prose-chat">{formatContent(displayContent)}</div>;
+  };
+
+  // Render attachments
+  const renderAttachments = () => {
+    if (!message.attachments || message.attachments.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-2 mb-3">
+        {message.attachments.map((attachment) => (
+          <div key={attachment.id} className="relative">
+            {attachment.type.startsWith('image/') && attachment.url ? (
+              <div className="rounded-lg overflow-hidden border border-border/50 shadow-sm">
+                <img
+                  src={attachment.url}
+                  alt={attachment.name}
+                  className="max-w-[200px] max-h-[200px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => {
+                    // Open image in new tab
+                    window.open(attachment.url, '_blank');
+                  }}
+                />
+                <div className="px-2 py-1 bg-muted/50 text-xs text-muted-foreground truncate max-w-[200px]">
+                  {attachment.name}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border border-border/50">
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate max-w-[150px]">{attachment.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {Math.round(attachment.size / 1024)} KB
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -149,6 +197,9 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
             </span>
           )}
         </div>
+
+        {/* Attachments */}
+        {isUser && renderAttachments()}
 
         <div className="text-foreground">
           {renderContent()}

@@ -6,6 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface MessageContent {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: {
+    url: string;
+  };
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | MessageContent[];
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -21,7 +34,32 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
+    // Validate messages
+    if (!Array.isArray(messages)) {
+      throw new Error('Messages must be an array');
+    }
+
     console.log('Sending request to Lovable AI with', messages.length, 'messages');
+
+    // Check if any message has multimodal content
+    const hasMultimodal = messages.some((m: ChatMessage) => Array.isArray(m.content));
+    console.log('Multimodal content detected:', hasMultimodal);
+
+    const systemPrompt = `You are Mohamed's AI, an intelligent, helpful, and professional assistant. You excel at:
+- Writing and debugging code in any programming language
+- Analyzing images, documents, and files with detailed insights
+- Reading and extracting information from uploaded files
+- Creative brainstorming and ideation
+- Explaining complex topics simply
+- Helping with research and learning
+
+When analyzing images or files:
+- Describe what you see in detail
+- Extract any text, data, or relevant information
+- Provide insights and answer questions about the content
+- If it's code, analyze it and suggest improvements
+
+Be concise but thorough. Use markdown formatting for code blocks, lists, and emphasis. Be friendly and professional.`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -32,17 +70,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { 
-            role: 'system', 
-            content: `You are Mohamed's AI, an intelligent, helpful, and professional assistant. You excel at:
-- Writing and debugging code in any programming language
-- Analyzing text and providing insights
-- Creative brainstorming and ideation
-- Explaining complex topics simply
-- Helping with research and learning
-
-Be concise but thorough. Use markdown formatting for code blocks, lists, and emphasis. Be friendly and professional.`
-          },
+          { role: 'system', content: systemPrompt },
           ...messages,
         ],
         stream: true,

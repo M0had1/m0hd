@@ -1,9 +1,19 @@
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url?: string; // For image previews
+  content?: string; // For text content or base64 image data
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  attachments?: Attachment[];
 }
 
 export interface Conversation {

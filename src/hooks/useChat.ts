@@ -1,10 +1,50 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Message, Conversation } from '@/types/chat';
+import { Message, Conversation, Attachment } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Session } from '@supabase/supabase-js';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+
+// Convert file to base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+// Read text file content
+const readTextFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsText(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+// Check if file is an image
+const isImageFile = (file: File): boolean => {
+  return file.type.startsWith('image/');
+};
+
+// Check if file is a text-based file
+const isTextFile = (file: File): boolean => {
+  const textTypes = [
+    'text/',
+    'application/json',
+    'application/xml',
+    'application/javascript',
+    'application/typescript',
+  ];
+  const textExtensions = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.css', '.js', '.ts', '.tsx', '.jsx', '.py', '.java', '.c', '.cpp', '.h', '.sql', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.log'];
+  
+  return textTypes.some(type => file.type.startsWith(type)) ||
+    textExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+};
 
 export const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -59,18 +99,67 @@ export const useChat = () => {
     }
   }, [activeConversationId]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, files?: File[]) => {
     let conversationId = activeConversationId;
     
     if (!conversationId) {
       conversationId = createNewConversation();
     }
 
+    // Process attachments
+    const attachments: Attachment[] = [];
+    const imageContents: { type: 'image_url'; image_url: { url: string } }[] = [];
+    let textFileContents = '';
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const attachment: Attachment = {
+          id: generateId(),
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        };
+
+        if (isImageFile(file)) {
+          const base64 = await fileToBase64(file);
+          attachment.url = base64;
+          attachment.content = base64;
+          attachments.push(attachment);
+          
+          // Add to image contents for API
+          imageContents.push({
+            type: 'image_url',
+            image_url: { url: base64 }
+          });
+        } else if (isTextFile(file)) {
+          const textContent = await readTextFile(file);
+          attachment.content = textContent;
+          attachments.push(attachment);
+          
+          // Append text file content to the message
+          textFileContents += `\n\n--- Content of ${file.name} ---\n${textContent}\n--- End of ${file.name} ---\n`;
+        } else {
+          // For other files, try to read as text
+          try {
+            const textContent = await readTextFile(file);
+            attachment.content = textContent;
+            attachments.push(attachment);
+            textFileContents += `\n\n--- Content of ${file.name} ---\n${textContent}\n--- End of ${file.name} ---\n`;
+          } catch {
+            // If can't read, just add the file info
+            attachments.push(attachment);
+            textFileContents += `\n\n[Attached file: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)]`;
+          }
+        }
+      }
+    }
+
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
-      content,
+      content: content + textFileContents,
       timestamp: new Date(),
+      attachments: attachments.length > 0 ? attachments : undefined,
     };
 
     // Get current messages for API call
@@ -116,11 +205,28 @@ export const useChat = () => {
     );
 
     try {
-      // Prepare messages for API
+      // Prepare messages for API - handle multimodal content
       const apiMessages = [
-        ...previousMessages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user' as const, content }
+        ...previousMessages.map(m => {
+          // For previous messages, just send text content
+          return { role: m.role, content: m.content };
+        }),
       ];
+
+      // Build current message content
+      const fullTextContent = content + textFileContents;
+      
+      if (imageContents.length > 0) {
+        // Multimodal message with images
+        const messageContent: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [
+          { type: 'text', text: fullTextContent || 'Please analyze this image.' },
+          ...imageContents
+        ];
+        apiMessages.push({ role: 'user' as const, content: messageContent as any });
+      } else {
+        // Text-only message
+        apiMessages.push({ role: 'user' as const, content: fullTextContent });
+      }
 
       // Call the edge function with streaming using authenticated session
       const accessToken = session?.access_token;
