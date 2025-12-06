@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Message, Conversation } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { Session } from '@supabase/supabase-js';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -9,6 +10,22 @@ export const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+
+  // Get and track session for authenticated API calls
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
@@ -105,12 +122,17 @@ export const useChat = () => {
         { role: 'user' as const, content }
       ];
 
-      // Call the edge function with streaming
+      // Call the edge function with streaming using authenticated session
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error('You must be signed in to send messages');
+      }
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ messages: apiMessages }),
       });
@@ -209,7 +231,7 @@ export const useChat = () => {
     }
 
     setIsLoading(false);
-  }, [activeConversationId, createNewConversation, conversations]);
+  }, [activeConversationId, createNewConversation, conversations, session]);
 
   return {
     conversations,

@@ -2,6 +2,7 @@ import { Plus, MessageSquare, Trash2, Moon, Sun, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Conversation } from '@/types/chat';
+import { UserMenu } from '@/components/UserMenu';
 import { cn } from '@/lib/utils';
 
 interface ChatSidebarProps {
@@ -98,6 +99,11 @@ export const ChatSidebar = ({
           <Settings className="h-4 w-4" />
           Settings
         </Button>
+        
+        {/* User Menu */}
+        <div className="pt-2 border-t border-sidebar-border">
+          <UserMenu />
+        </div>
       </div>
     </div>
   );
