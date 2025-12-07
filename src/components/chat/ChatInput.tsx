@@ -77,7 +77,7 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
   };
 
   return (
-    <div className="border-t border-border bg-background/80 backdrop-blur-xl p-4">
+    <div className="border-t border-border bg-background/80 backdrop-blur-xl p-2 sm:p-4">
       {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
@@ -96,7 +96,7 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
         accept="image/*"
       />
 
-      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto px-1 sm:px-0">
         {/* Attachments preview */}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
@@ -212,7 +212,7 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center mt-3">
+        <p className="text-xs text-muted-foreground text-center mt-2 sm:mt-3 px-2">
           Mohamed's AI may make mistakes. Consider verifying important information.
         </p>
       </form>

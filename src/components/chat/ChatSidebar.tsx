@@ -25,7 +25,7 @@ export const ChatSidebar = ({
   onToggleTheme,
 }: ChatSidebarProps) => {
   return (
-    <div className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border">
+    <div className="flex h-full w-full flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3 mb-4">
