@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, Image, X } from 'lucide-react';
+import { Send, Paperclip, Mic, Image, X, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: File[]) => void;
+  onStop?: () => void;
   isLoading: boolean;
 }
 
-export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -197,18 +198,30 @@ export const ChatInput = ({ onSend, isLoading }: ChatInputProps) => {
             >
               <Mic className="h-4 w-4" />
             </Button>
-            <Button
-              type="submit"
-              variant="gold"
-              size="icon-sm"
-              disabled={(!message.trim() && attachments.length === 0) || isLoading}
-              className={cn(
-                "h-8 w-8 rounded-xl transition-all",
-                (message.trim() || attachments.length > 0) && !isLoading ? "opacity-100" : "opacity-50"
-              )}
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+            {isLoading && onStop ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon-sm"
+                onClick={onStop}
+                className="h-8 w-8 rounded-xl"
+              >
+                <Square className="h-3 w-3 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="gold"
+                size="icon-sm"
+                disabled={(!message.trim() && attachments.length === 0) || isLoading}
+                className={cn(
+                  "h-8 w-8 rounded-xl transition-all",
+                  (message.trim() || attachments.length > 0) && !isLoading ? "opacity-100" : "opacity-50"
+                )}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
 
