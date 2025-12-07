@@ -16,15 +16,13 @@ interface ChatHeaderProps {
 
 export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen }: ChatHeaderProps) => {
   return (
-    <header className="h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-4">
-      <div className="flex items-center gap-3">
-        {!isSidebarOpen && (
-          <Button variant="ghost" size="icon-sm" onClick={onToggleSidebar}>
-            <Menu className="h-5 w-5" />
-          </Button>
-        )}
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground truncate max-w-[200px] sm:max-w-[300px]">
+    <header className="h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-2 sm:px-4">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <Button variant="ghost" size="icon-sm" onClick={onToggleSidebar} className="shrink-0">
+          <Menu className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium text-foreground truncate max-w-[120px] sm:max-w-[300px]">
             {title || "New Chat"}
           </span>
         </div>
