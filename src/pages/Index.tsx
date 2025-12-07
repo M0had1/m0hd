@@ -30,6 +30,7 @@ const Index = () => {
     createNewConversation,
     deleteConversation,
     sendMessage,
+    stopGeneration,
   } = useChat();
 
   useEffect(() => {
@@ -116,7 +117,7 @@ const Index = () => {
         )}
 
         {/* Input */}
-        <ChatInput onSend={sendMessage} isLoading={isLoading} />
+        <ChatInput onSend={sendMessage} onStop={stopGeneration} isLoading={isLoading} />
       </div>
     </div>
   );

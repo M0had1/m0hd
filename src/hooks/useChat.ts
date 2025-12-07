@@ -51,6 +51,7 @@ export const useChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   // Get and track session for authenticated API calls
   useEffect(() => {
@@ -234,6 +235,10 @@ export const useChat = () => {
         throw new Error('You must be signed in to send messages');
       }
 
+      // Create abort controller for this request
+      const controller = new AbortController();
+      setAbortController(controller);
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
@@ -241,6 +246,7 @@ export const useChat = () => {
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ messages: apiMessages }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -312,32 +318,59 @@ export const useChat = () => {
         )
       );
     } catch (error) {
-      console.error('Chat error:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to send message',
-        variant: 'destructive',
-      });
-      
-      // Update message with error state
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === conversationId
-            ? {
-                ...conv,
-                messages: conv.messages.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, content: 'Sorry, there was an error processing your request. Please try again.', isStreaming: false }
-                    : msg
-                ),
-              }
-            : conv
-        )
-      );
+      // Check if it was an abort
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Mark streaming as complete but keep current content
+        setConversations(prev =>
+          prev.map(conv =>
+            conv.id === conversationId
+              ? {
+                  ...conv,
+                  messages: conv.messages.map(msg =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, isStreaming: false }
+                      : msg
+                  ),
+                }
+              : conv
+          )
+        );
+      } else {
+        console.error('Chat error:', error);
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to send message',
+          variant: 'destructive',
+        });
+        
+        // Update message with error state
+        setConversations(prev =>
+          prev.map(conv =>
+            conv.id === conversationId
+              ? {
+                  ...conv,
+                  messages: conv.messages.map(msg =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: 'Sorry, there was an error processing your request. Please try again.', isStreaming: false }
+                      : msg
+                  ),
+                }
+              : conv
+          )
+        );
+      }
     }
 
+    setAbortController(null);
     setIsLoading(false);
   }, [activeConversationId, createNewConversation, conversations, session]);
+
+  const stopGeneration = useCallback(() => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+    }
+  }, [abortController]);
 
   return {
     conversations,
@@ -349,5 +382,6 @@ export const useChat = () => {
     updateConversationTitle,
     deleteConversation,
     sendMessage,
+    stopGeneration,
   };
 };
