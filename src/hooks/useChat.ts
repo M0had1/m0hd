@@ -3,6 +3,7 @@ import { Message, Conversation, Attachment } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Session } from '@supabase/supabase-js';
+import { useAISettings } from '@/hooks/useAISettings';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -52,6 +53,7 @@ export const useChat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const { buildSystemPrompt } = useAISettings();
 
   // Get and track session for authenticated API calls
   useEffect(() => {
@@ -239,13 +241,16 @@ export const useChat = () => {
       const controller = new AbortController();
       setAbortController(controller);
 
+      // Build custom system prompt from settings
+      const systemPrompt = buildSystemPrompt();
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, systemPrompt }),
         signal: controller.signal,
       });
 
