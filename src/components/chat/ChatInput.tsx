@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, Image, X, Square } from 'lucide-react';
+import { Send, Paperclip, Mic, Image, X, Square, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { CameraCapture } from './CameraCapture';
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: File[]) => void;
@@ -13,6 +14,7 @@ export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +71,10 @@ export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
 
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCameraCapture = (file: File) => {
+    setAttachments((prev) => [...prev, file].slice(0, 10));
   };
 
   const formatFileSize = (bytes: number) => {
@@ -170,6 +176,16 @@ export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
             >
               <Image className="h-4 w-4" />
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setIsCameraOpen(true)}
+              title="Take photo"
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Text input */}
@@ -229,6 +245,13 @@ export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
           Mohamed's AI may make mistakes. Consider verifying important information.
         </p>
       </form>
+
+      {/* Camera Modal */}
+      <CameraCapture
+        open={isCameraOpen}
+        onOpenChange={setIsCameraOpen}
+        onCapture={handleCameraCapture}
+      />
     </div>
   );
 };
