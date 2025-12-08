@@ -1,7 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { Sparkles, Code, FileText, Lightbulb, Zap, Send } from 'lucide-react';
+import { Sparkles, Code, FileText, Lightbulb, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface WelcomeScreenProps {
   onSendMessage: (message: string) => void;
@@ -35,30 +33,6 @@ const suggestions = [
 ];
 
 export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
-  const [message, setMessage] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  }, [message]);
-
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!message.trim()) return;
-    onSendMessage(message);
-    setMessage('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 animate-fade-in overflow-auto">
       {/* Logo */}
@@ -78,37 +52,6 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
       <p className="text-muted-foreground text-center max-w-md mb-6 sm:mb-8 text-sm sm:text-base px-2">
         Your intelligent assistant for coding, analysis, creative tasks, and more.
       </p>
-
-      {/* Chat Input */}
-      <form onSubmit={handleSubmit} className="w-full max-w-2xl mb-6 sm:mb-8 px-2 sm:px-0">
-        <div className="relative flex items-end gap-2 glass rounded-2xl p-2">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask anything..."
-            rows={1}
-            className={cn(
-              "flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground",
-              "focus:outline-none py-2 px-3 max-h-[120px]",
-              "scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
-            )}
-          />
-          <Button
-            type="submit"
-            variant="gold"
-            size="icon-sm"
-            disabled={!message.trim()}
-            className={cn(
-              "h-8 w-8 rounded-xl transition-all shrink-0",
-              message.trim() ? "opacity-100" : "opacity-50"
-            )}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </form>
 
       {/* Suggestion cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-w-2xl w-full px-2 sm:px-0">
@@ -135,8 +78,7 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
 
       {/* Footer note */}
       <p className="text-xs text-muted-foreground mt-8 sm:mt-12 text-center px-4">
-        Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">Enter</kbd> to send, 
-        <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono ml-1">Shift + Enter</kbd> for new line
+        Type your message below to start a conversation
       </p>
     </div>
   );
