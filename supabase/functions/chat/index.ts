@@ -26,7 +26,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, systemPrompt: customSystemPrompt } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -45,7 +45,8 @@ serve(async (req) => {
     const hasMultimodal = messages.some((m: ChatMessage) => Array.isArray(m.content));
     console.log('Multimodal content detected:', hasMultimodal);
 
-    const systemPrompt = `You are Mohamed's AI, an intelligent, helpful, and professional assistant. You excel at:
+    // Use custom system prompt if provided, otherwise use default
+    const systemPrompt = customSystemPrompt || `You are Mohamed's AI, an intelligent, helpful, and professional assistant. You excel at:
 - Writing and debugging code in any programming language
 - Analyzing images, documents, and files with detailed insights
 - Reading and extracting information from uploaded files
