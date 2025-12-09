@@ -104,6 +104,41 @@ const isImageEditRequest = (content: string, hasImage: boolean): boolean => {
   return editKeywords.some(keyword => lowerContent.includes(keyword));
 };
 
+// Check if prompt needs real-time web search
+const needsWebSearch = (content: string): boolean => {
+  const lowerContent = content.toLowerCase();
+  const searchKeywords = [
+    'search for',
+    'search the web',
+    'look up',
+    'find information',
+    'what is the latest',
+    'current news',
+    'recent news',
+    'today',
+    'yesterday',
+    'this week',
+    'this month',
+    '2024',
+    '2025',
+    'right now',
+    'latest',
+    'recent',
+    'current',
+    'update on',
+    'news about',
+    'what happened',
+    'who won',
+    'stock price',
+    'weather',
+    'score',
+    'results',
+    'breaking',
+    'trending',
+  ];
+  return searchKeywords.some(keyword => lowerContent.includes(keyword));
+};
+
 export const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -505,7 +540,32 @@ export const useChat = () => {
         ];
 
         // Build current message content
-        const fullTextContent = content + textFileContents;
+        let fullTextContent = content + textFileContents;
+        
+        // Check if we need real-time web search
+        if (needsWebSearch(content)) {
+          try {
+            const searchResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ query: content }),
+              signal: controller.signal,
+            });
+
+            if (searchResponse.ok) {
+              const searchData = await searchResponse.json();
+              if (searchData.success && searchData.results) {
+                fullTextContent = `${content}\n\n[Real-time web search results for context - use this information to provide an up-to-date response]:\n${searchData.results}\n\n[End of search results]\n${textFileContents}`;
+              }
+            }
+          } catch (searchError) {
+            console.error('Web search failed:', searchError);
+            // Continue without search results
+          }
+        }
         
         if (imageContents.length > 0) {
           const messageContent: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [
