@@ -1,13 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
+import { VoiceCallOverlay } from '@/components/chat/VoiceCallOverlay';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useChat } from '@/hooks/useChat';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
@@ -20,6 +22,7 @@ const Index = () => {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pendingVoiceMessageRef = useRef<string | null>(null);
 
   const {
     conversations,
@@ -32,6 +35,42 @@ const Index = () => {
     sendMessage,
     stopGeneration,
   } = useChat();
+
+  // Handle voice transcript - send message when user speaks
+  const handleVoiceTranscript = useCallback((transcript: string) => {
+    if (transcript.trim()) {
+      pendingVoiceMessageRef.current = transcript;
+      sendMessage(transcript);
+    }
+  }, [sendMessage]);
+
+  const {
+    isListening,
+    isSpeaking,
+    isVoiceMode,
+    isSupported: isVoiceSupported,
+    speak,
+    toggleVoiceMode,
+    endVoiceMode,
+  } = useVoiceConversation({
+    onTranscript: handleVoiceTranscript,
+  });
+
+  // Speak AI responses when in voice mode
+  useEffect(() => {
+    if (isVoiceMode && activeConversation?.messages.length) {
+      const lastMessage = activeConversation.messages[activeConversation.messages.length - 1];
+      
+      // Only speak if it's an assistant message that just finished streaming
+      if (lastMessage.role === 'assistant' && !lastMessage.isStreaming && lastMessage.content) {
+        // Check if this is a response to a voice message
+        if (pendingVoiceMessageRef.current) {
+          pendingVoiceMessageRef.current = null;
+          speak(lastMessage.content);
+        }
+      }
+    }
+  }, [isVoiceMode, activeConversation?.messages, speak]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -117,8 +156,22 @@ const Index = () => {
         )}
 
         {/* Input */}
-        <ChatInput onSend={sendMessage} onStop={stopGeneration} isLoading={isLoading} />
+        <ChatInput 
+          onSend={sendMessage} 
+          onStop={stopGeneration} 
+          isLoading={isLoading}
+          onStartVoiceCall={toggleVoiceMode}
+          isVoiceSupported={isVoiceSupported}
+        />
       </div>
+
+      {/* Voice Call Overlay */}
+      <VoiceCallOverlay
+        isActive={isVoiceMode}
+        isListening={isListening}
+        isSpeaking={isSpeaking}
+        onEnd={endVoiceMode}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, Image, X, Square, Camera } from 'lucide-react';
+import { Send, Paperclip, Mic, Image, X, Square, Camera, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CameraCapture } from './CameraCapture';
@@ -8,9 +8,11 @@ interface ChatInputProps {
   onSend: (message: string, attachments?: File[]) => void;
   onStop?: () => void;
   isLoading: boolean;
+  onStartVoiceCall?: () => void;
+  isVoiceSupported?: boolean;
 }
 
-export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoiceSupported }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -206,14 +208,18 @@ export const ChatInput = ({ onSend, onStop, isLoading }: ChatInputProps) => {
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 pb-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Mic className="h-4 w-4" />
-            </Button>
+            {isVoiceSupported && onStartVoiceCall && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                onClick={onStartVoiceCall}
+                title="Start voice call"
+              >
+                <Phone className="h-4 w-4" />
+              </Button>
+            )}
             {isLoading && onStop ? (
               <Button
                 type="button"
