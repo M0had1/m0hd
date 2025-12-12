@@ -44,16 +44,24 @@ const Index = () => {
     }
   }, [sendMessage]);
 
+  // Handle voice errors
+  const handleVoiceError = useCallback((error: string) => {
+    console.error('Voice error:', error);
+    // Could show a toast here if needed
+  }, []);
+
   const {
     isListening,
     isSpeaking,
     isVoiceMode,
+    isInitializing,
     isSupported: isVoiceSupported,
     speak,
     toggleVoiceMode,
     endVoiceMode,
   } = useVoiceConversation({
     onTranscript: handleVoiceTranscript,
+    onError: handleVoiceError,
   });
 
   // Speak AI responses when in voice mode
@@ -170,6 +178,7 @@ const Index = () => {
         isActive={isVoiceMode}
         isListening={isListening}
         isSpeaking={isSpeaking}
+        isInitializing={isInitializing}
         onEnd={endVoiceMode}
       />
     </div>
