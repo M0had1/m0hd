@@ -34,6 +34,7 @@ interface SpeechRecognitionInstance extends EventTarget {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onend: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onstart: (() => void) | null;
 }
 
 declare global {
@@ -46,12 +47,14 @@ declare global {
 interface UseVoiceConversationProps {
   onTranscript: (text: string) => void;
   onSpeakingChange?: (isSpeaking: boolean) => void;
+  onError?: (error: string) => void;
 }
 
-export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoiceConversationProps) => {
+export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }: UseVoiceConversationProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isVoiceModeRef = useRef(false);
@@ -71,6 +74,12 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
         recognition.interimResults = false;
         recognition.lang = 'en-US';
 
+        recognition.onstart = () => {
+          console.log('Speech recognition started');
+          setIsListening(true);
+          setIsInitializing(false);
+        };
+
         recognition.onresult = (event: SpeechRecognitionEvent) => {
           const transcript = event.results[0][0].transcript;
           console.log('Voice transcript:', transcript);
@@ -78,12 +87,29 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
         };
 
         recognition.onend = () => {
+          console.log('Speech recognition ended');
           setIsListening(false);
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
           console.error('Speech recognition error:', event.error);
           setIsListening(false);
+          setIsInitializing(false);
+          
+          if (event.error === 'not-allowed') {
+            onError?.('Microphone permission denied. Please allow microphone access.');
+          } else if (event.error === 'no-speech') {
+            // No speech detected, restart if still in voice mode
+            if (isVoiceModeRef.current) {
+              setTimeout(() => {
+                try {
+                  recognitionRef.current?.start();
+                } catch (e) {
+                  console.error('Error restarting after no-speech:', e);
+                }
+              }, 100);
+            }
+          }
         };
 
         recognitionRef.current = recognition;
@@ -96,29 +122,64 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
       }
       window.speechSynthesis?.cancel();
     };
-  }, [onTranscript]);
+  }, [onTranscript, onError]);
 
-  const startListening = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
-      try {
-        // Stop any ongoing speech
-        window.speechSynthesis?.cancel();
-        setIsSpeaking(false);
-        
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (error) {
-        console.error('Error starting speech recognition:', error);
-      }
+  // Request microphone permission
+  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream immediately, we just needed permission
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      console.error('Microphone permission denied:', error);
+      onError?.('Microphone permission denied. Please allow microphone access to use voice chat.');
+      return false;
     }
-  }, [isListening]);
+  }, [onError]);
+
+  const startListening = useCallback(async () => {
+    if (!recognitionRef.current) {
+      onError?.('Speech recognition is not supported in your browser.');
+      return;
+    }
+
+    if (isListening) return;
+
+    setIsInitializing(true);
+
+    // First request microphone permission
+    const hasPermission = await requestMicrophonePermission();
+    if (!hasPermission) {
+      setIsInitializing(false);
+      return;
+    }
+
+    try {
+      // Stop any ongoing speech
+      window.speechSynthesis?.cancel();
+      setIsSpeaking(false);
+      
+      recognitionRef.current.start();
+      console.log('Started speech recognition');
+    } catch (error) {
+      console.error('Error starting speech recognition:', error);
+      setIsInitializing(false);
+      onError?.('Failed to start voice recognition. Please try again.');
+    }
+  }, [isListening, requestMicrophonePermission, onError]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.error('Error stopping recognition:', e);
+      }
       setIsListening(false);
+      setIsInitializing(false);
     }
-  }, [isListening]);
+  }, []);
 
   const speak = useCallback((text: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -154,11 +215,13 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
       }
 
       utterance.onstart = () => {
+        console.log('Speech synthesis started');
         setIsSpeaking(true);
         onSpeakingChange?.(true);
       };
 
       utterance.onend = () => {
+        console.log('Speech synthesis ended');
         setIsSpeaking(false);
         onSpeakingChange?.(false);
         
@@ -167,7 +230,6 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
           setTimeout(() => {
             try {
               recognitionRef.current?.start();
-              setIsListening(true);
             } catch (e) {
               console.error('Error restarting listening:', e);
             }
@@ -175,7 +237,8 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
         }
       };
 
-      utterance.onerror = () => {
+      utterance.onerror = (e) => {
+        console.error('Speech synthesis error:', e);
         setIsSpeaking(false);
         onSpeakingChange?.(false);
       };
@@ -191,14 +254,14 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
     onSpeakingChange?.(false);
   }, [onSpeakingChange]);
 
-  const toggleVoiceMode = useCallback(() => {
+  const toggleVoiceMode = useCallback(async () => {
     if (isVoiceMode) {
       stopListening();
       stopSpeaking();
       setIsVoiceMode(false);
     } else {
       setIsVoiceMode(true);
-      startListening();
+      await startListening();
     }
   }, [isVoiceMode, startListening, stopListening, stopSpeaking]);
 
@@ -216,6 +279,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange }: UseVoic
     isListening,
     isSpeaking,
     isVoiceMode,
+    isInitializing,
     isSupported,
     startListening,
     stopListening,
