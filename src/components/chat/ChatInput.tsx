@@ -3,6 +3,7 @@ import { Send, Paperclip, Mic, Image, X, Square, Camera, Phone } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CameraCapture } from './CameraCapture';
+import { PromptLibrary } from './PromptLibrary';
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: File[]) => void;
@@ -10,9 +11,10 @@ interface ChatInputProps {
   isLoading: boolean;
   onStartVoiceCall?: () => void;
   isVoiceSupported?: boolean;
+  onPromptSelect?: (prompt: string) => void;
 }
 
-export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoiceSupported }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoiceSupported, onPromptSelect }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -158,6 +160,10 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
         <div className="relative flex items-end gap-2 glass rounded-2xl p-2">
           {/* Attachment buttons */}
           <div className="flex items-center gap-1 pb-1">
+            <PromptLibrary onSelectPrompt={(prompt) => {
+              setMessage(prompt);
+              onPromptSelect?.(prompt);
+            }} />
             <Button
               type="button"
               variant="ghost"
