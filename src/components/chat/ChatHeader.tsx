@@ -1,4 +1,5 @@
-import { Menu, MoreHorizontal, Share2, Download } from 'lucide-react';
+import { Menu, MoreHorizontal, Share2, Download, Code2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -7,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatHeaderProps {
   title: string;
@@ -15,6 +17,8 @@ interface ChatHeaderProps {
 }
 
 export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen }: ChatHeaderProps) => {
+  const navigate = useNavigate();
+
   return (
     <header className="h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-2 sm:px-4">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -29,6 +33,20 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen }: ChatHeader
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Code Playground */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon-sm" 
+              onClick={() => navigate('/playground')}
+            >
+              <Code2 className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Code Playground</TooltipContent>
+        </Tooltip>
+
         {/* Model selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
