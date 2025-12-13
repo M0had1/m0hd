@@ -7,6 +7,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Playground from "./pages/Playground";
+import Install from "./pages/Install";
+import SharedConversation from "./pages/SharedConversation";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -19,6 +21,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/install" element={<Install />} />
+          <Route path="/shared/:token" element={<SharedConversation />} />
           <Route 
             path="/" 
             element={

@@ -147,6 +147,7 @@ const Index = () => {
           title={activeConversation?.title || ''}
           onToggleSidebar={toggleSidebar}
           isSidebarOpen={isSidebarOpen && !isMobile}
+          conversationId={activeConversationId || undefined}
         />
 
         {/* Messages or Welcome Screen */}

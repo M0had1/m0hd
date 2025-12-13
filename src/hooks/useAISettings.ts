@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { getMemoriesForAI } from '@/lib/memories';
 
 export interface AISettings {
   tone: string;
@@ -32,7 +33,7 @@ export const useAISettings = () => {
     }
   }, []);
 
-  const buildSystemPrompt = (): string => {
+  const buildSystemPrompt = useCallback(async (): Promise<string> => {
     const parts: string[] = [];
 
     // Base prompt
@@ -107,13 +108,19 @@ export const useAISettings = () => {
     parts.push('You have advanced capabilities including:');
     parts.push('- Code execution: You can run JavaScript and Python code when the user asks to execute or run code.');
     parts.push('- Document analysis: You can analyze uploaded files including CSV, JSON, code files, and more.');
-    parts.push('- Memory: You remember context from the conversation to provide personalized responses.');
+    parts.push('- Memory: You remember context from the conversation and user preferences to provide personalized responses.');
     parts.push('- Image analysis: You can describe and analyze images.');
     parts.push('- Web search: Real-time information is available when needed.');
     parts.push('Use markdown formatting for code blocks, lists, and emphasis.');
 
+    // Add persistent memories
+    const memories = await getMemoriesForAI();
+    if (memories) {
+      parts.push(memories);
+    }
+
     return parts.join(' ');
-  };
+  }, [settings]);
 
   return {
     settings,
