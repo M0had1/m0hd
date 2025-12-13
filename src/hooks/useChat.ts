@@ -139,6 +139,40 @@ const needsWebSearch = (content: string): boolean => {
   return searchKeywords.some(keyword => lowerContent.includes(keyword));
 };
 
+// Check if prompt needs code execution
+const needsCodeExecution = (content: string): boolean => {
+  const lowerContent = content.toLowerCase();
+  const codeKeywords = [
+    'run this code',
+    'execute this',
+    'run the code',
+    'execute the code',
+    'calculate',
+    'compute',
+    'what is the result of',
+    'evaluate',
+    'test this code',
+    'try this code',
+  ];
+  return codeKeywords.some(keyword => lowerContent.includes(keyword));
+};
+
+// Extract code blocks from content
+const extractCodeBlocks = (content: string): { code: string; language: string }[] => {
+  const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+  const blocks: { code: string; language: string }[] = [];
+  let match;
+  
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    blocks.push({
+      language: match[1]?.toLowerCase() || 'javascript',
+      code: match[2].trim(),
+    });
+  }
+  
+  return blocks;
+};
+
 export const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -564,6 +598,35 @@ export const useChat = () => {
           } catch (searchError) {
             console.error('Web search failed:', searchError);
             // Continue without search results
+          }
+        }
+
+        // Check if we need code execution
+        const codeBlocks = extractCodeBlocks(content);
+        if (needsCodeExecution(content) && codeBlocks.length > 0) {
+          try {
+            const codeResults: string[] = [];
+            for (const block of codeBlocks) {
+              const codeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-code`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({ code: block.code, language: block.language }),
+                signal: controller.signal,
+              });
+
+              if (codeResponse.ok) {
+                const codeData = await codeResponse.json();
+                codeResults.push(`\n**Code Execution Result (${block.language}):**\n\`\`\`\n${codeData.output || codeData.error || 'No output'}\n\`\`\`\n(Executed in ${codeData.executionTime}ms)`);
+              }
+            }
+            if (codeResults.length > 0) {
+              fullTextContent += '\n\n[Code execution results for your reference]:' + codeResults.join('\n');
+            }
+          } catch (codeError) {
+            console.error('Code execution failed:', codeError);
           }
         }
         

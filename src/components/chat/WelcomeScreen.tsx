@@ -1,4 +1,4 @@
-import { Sparkles, Code, FileText, Lightbulb, Zap } from 'lucide-react';
+import { Sparkles, Code, FileText, Lightbulb, Zap, Play, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface WelcomeScreenProps {
@@ -7,28 +7,40 @@ interface WelcomeScreenProps {
 
 const suggestions = [
   {
-    icon: Code,
-    title: "Write code",
-    prompt: "Help me write a React component for a responsive navigation menu",
+    icon: Play,
+    title: "Run code",
+    prompt: "Run this code and show me the result:\n```javascript\nconst numbers = [1, 2, 3, 4, 5];\nconst sum = numbers.reduce((a, b) => a + b, 0);\nconsole.log('Sum:', sum);\nconsole.log('Average:', sum / numbers.length);\n```",
     color: "text-emerald",
   },
   {
     icon: FileText,
-    title: "Analyze text",
-    prompt: "Summarize the key points from this article and provide insights",
+    title: "Analyze files",
+    prompt: "I want to upload a CSV or JSON file for you to analyze. What can you tell me about my data?",
     color: "text-gold",
   },
   {
-    icon: Lightbulb,
-    title: "Brainstorm ideas",
-    prompt: "Give me creative ideas for a mobile app that helps with productivity",
+    icon: Brain,
+    title: "Remember context",
+    prompt: "My name is [Your Name] and I'm working on a web development project. Please remember this for our conversation.",
     color: "text-primary",
+  },
+  {
+    icon: Code,
+    title: "Write code",
+    prompt: "Help me write a React component for a responsive navigation menu with TypeScript",
+    color: "text-secondary",
+  },
+  {
+    icon: Lightbulb,
+    title: "Brainstorm",
+    prompt: "Give me creative ideas for a mobile app that helps with productivity",
+    color: "text-purple-500",
   },
   {
     icon: Zap,
     title: "Quick answers",
-    prompt: "Explain quantum computing in simple terms",
-    color: "text-secondary",
+    prompt: "Explain how async/await works in JavaScript with examples",
+    color: "text-orange-500",
   },
 ];
 
@@ -50,11 +62,11 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
         Welcome to Mohamed's AI
       </h1>
       <p className="text-muted-foreground text-center max-w-md mb-6 sm:mb-8 text-sm sm:text-base px-2">
-        Your intelligent assistant for coding, analysis, creative tasks, and more.
+        Your intelligent assistant with code execution, document analysis, memory, and more.
       </p>
 
       {/* Suggestion cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-w-2xl w-full px-2 sm:px-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-w-4xl w-full px-2 sm:px-0">
         {suggestions.map((suggestion, index) => {
           const Icon = suggestion.icon;
           return (

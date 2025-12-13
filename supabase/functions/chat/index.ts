@@ -19,6 +19,78 @@ interface ChatMessage {
   content: string | MessageContent[];
 }
 
+// Tool definitions for the AI
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "execute_code",
+      description: "Execute JavaScript or Python code and return the result. Use this when the user asks you to run, execute, calculate, or test code. Supports console.log, mathematical operations, array/object manipulation, and basic Python syntax.",
+      parameters: {
+        type: "object",
+        properties: {
+          code: {
+            type: "string",
+            description: "The code to execute"
+          },
+          language: {
+            type: "string",
+            enum: ["javascript", "python"],
+            description: "The programming language (javascript or python)"
+          }
+        },
+        required: ["code", "language"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_document",
+      description: "Analyze and extract information from uploaded documents like CSV, JSON, code files, markdown, etc. Use this when the user uploads a file and asks for analysis, summary, or data extraction.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "The document content to analyze"
+          },
+          fileName: {
+            type: "string",
+            description: "The name of the file being analyzed"
+          },
+          fileType: {
+            type: "string",
+            description: "The MIME type or extension of the file"
+          }
+        },
+        required: ["content", "fileName"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "remember_context",
+      description: "Remember important information from the conversation for future reference. Use this to store user preferences, important facts, or context that should persist.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: {
+            type: "string",
+            description: "A short identifier for this memory (e.g., 'user_name', 'project_goal')"
+          },
+          value: {
+            type: "string",
+            description: "The information to remember"
+          }
+        },
+        required: ["key", "value"]
+      }
+    }
+  }
+];
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -26,7 +98,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, systemPrompt: customSystemPrompt } = await req.json();
+    const { messages, systemPrompt: customSystemPrompt, conversationMemory } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -45,23 +117,35 @@ serve(async (req) => {
     const hasMultimodal = messages.some((m: ChatMessage) => Array.isArray(m.content));
     console.log('Multimodal content detected:', hasMultimodal);
 
+    // Build memory context
+    let memoryContext = '';
+    if (conversationMemory && Object.keys(conversationMemory).length > 0) {
+      memoryContext = '\n\n**Remembered context from this conversation:**\n';
+      for (const [key, value] of Object.entries(conversationMemory)) {
+        memoryContext += `- ${key}: ${value}\n`;
+      }
+    }
+
     // Use custom system prompt if provided, otherwise use default
-    const systemPrompt = customSystemPrompt || `You are Mohamed's AI, an intelligent, helpful, and professional assistant. You excel at:
-- Writing and debugging code in any programming language
-- Analyzing images, documents, and files with detailed insights
-- Reading and extracting information from uploaded files
-- Creative brainstorming and ideation
-- Explaining complex topics simply
-- Helping with research and learning
+    const baseSystemPrompt = customSystemPrompt || `You are Mohamed's AI, an intelligent, helpful, and professional assistant with advanced capabilities:
 
-When analyzing images or files:
-- Describe what you see in detail
-- Extract any text, data, or relevant information
-- Provide insights and answer questions about the content
-- If it's code, analyze it and suggest improvements
+## Core Capabilities:
+- **Code Execution**: You can run JavaScript and Python code using the execute_code tool. When users ask you to calculate, run code, or test something, use this tool.
+- **Document Analysis**: You can analyze uploaded files (CSV, JSON, code, markdown, etc.) using the analyze_document tool.
+- **Memory**: You can remember important information using the remember_context tool. Use this to store user preferences, names, project details, etc.
+- **Image Analysis**: You can analyze images and provide detailed descriptions.
+- **Web Search**: Real-time information is provided when available.
 
-Be concise but thorough. Use markdown formatting for code blocks, lists, and emphasis. Be friendly and professional.`;
+## Guidelines:
+- When asked to run or execute code, ALWAYS use the execute_code tool
+- When analyzing uploaded files, use the analyze_document tool for better structured output
+- Remember important user details for personalized responses
+- Be concise but thorough. Use markdown formatting.
+- Be friendly and professional.`;
 
+    const systemPrompt = baseSystemPrompt + memoryContext;
+
+    // First, make a request to check if tools are needed
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -75,6 +159,8 @@ Be concise but thorough. Use markdown formatting for code blocks, lists, and emp
           ...messages,
         ],
         stream: true,
+        tools: tools,
+        tool_choice: "auto",
       }),
     });
 

@@ -103,7 +103,14 @@ export const useAISettings = () => {
       parts.push(`Additional instructions from the user: ${settings.customInstructions}`);
     }
 
-    parts.push('You can analyze images, documents, and files that users share with you.');
+    // Advanced capabilities
+    parts.push('You have advanced capabilities including:');
+    parts.push('- Code execution: You can run JavaScript and Python code when the user asks to execute or run code.');
+    parts.push('- Document analysis: You can analyze uploaded files including CSV, JSON, code files, and more.');
+    parts.push('- Memory: You remember context from the conversation to provide personalized responses.');
+    parts.push('- Image analysis: You can describe and analyze images.');
+    parts.push('- Web search: Real-time information is available when needed.');
+    parts.push('Use markdown formatting for code blocks, lists, and emphasis.');
 
     return parts.join(' ');
   };
