@@ -58,13 +58,22 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isVoiceModeRef = useRef(false);
+  
+  // Store callbacks in refs to avoid recreating recognition
+  const onTranscriptRef = useRef(onTranscript);
+  const onErrorRef = useRef(onError);
+  
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+    onErrorRef.current = onError;
+  }, [onTranscript, onError]);
 
   // Keep ref in sync with state
   useEffect(() => {
     isVoiceModeRef.current = isVoiceMode;
   }, [isVoiceMode]);
 
-  // Initialize speech recognition
+  // Initialize speech recognition - only once
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -83,7 +92,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
         recognition.onresult = (event: SpeechRecognitionEvent) => {
           const transcript = event.results[0][0].transcript;
           console.log('Voice transcript:', transcript);
-          onTranscript(transcript);
+          onTranscriptRef.current(transcript);
         };
 
         recognition.onend = () => {
@@ -97,7 +106,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
           setIsInitializing(false);
           
           if (event.error === 'not-allowed') {
-            onError?.('Microphone permission denied. Please allow microphone access.');
+            onErrorRef.current?.('Microphone permission denied. Please allow microphone access.');
           } else if (event.error === 'no-speech') {
             // No speech detected, restart if still in voice mode
             if (isVoiceModeRef.current) {
@@ -122,7 +131,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
       }
       window.speechSynthesis?.cancel();
     };
-  }, [onTranscript, onError]);
+  }, []);
 
   // Request microphone permission
   const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
@@ -133,14 +142,14 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
       return true;
     } catch (error) {
       console.error('Microphone permission denied:', error);
-      onError?.('Microphone permission denied. Please allow microphone access to use voice chat.');
+      onErrorRef.current?.('Microphone permission denied. Please allow microphone access to use voice chat.');
       return false;
     }
-  }, [onError]);
+  }, []);
 
   const startListening = useCallback(async () => {
     if (!recognitionRef.current) {
-      onError?.('Speech recognition is not supported in your browser.');
+      onErrorRef.current?.('Speech recognition is not supported in your browser.');
       return;
     }
 
@@ -165,9 +174,9 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
     } catch (error) {
       console.error('Error starting speech recognition:', error);
       setIsInitializing(false);
-      onError?.('Failed to start voice recognition. Please try again.');
+      onErrorRef.current?.('Failed to start voice recognition. Please try again.');
     }
-  }, [isListening, requestMicrophonePermission, onError]);
+  }, [isListening, requestMicrophonePermission]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
