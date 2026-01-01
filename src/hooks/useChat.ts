@@ -380,7 +380,7 @@ export const useChat = () => {
     }
   }, []);
 
-  const sendMessage = useCallback(async (content: string, files?: File[]) => {
+  const sendMessage = useCallback(async (content: string, files?: File[]): Promise<void> => {
     let conversationId = activeConversationId;
     
     if (!conversationId) {
@@ -641,7 +641,7 @@ export const useChat = () => {
         }
 
         // Build custom system prompt from settings
-        const systemPrompt = buildSystemPrompt();
+        const systemPrompt = await buildSystemPrompt();
 
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
           method: 'POST',
@@ -654,8 +654,15 @@ export const useChat = () => {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errorData.error || `API error: ${response.status}`);
+          const errorText = await response.text();
+          let errorMessage = `API error: ${response.status}`;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+          throw new Error(errorMessage);
         }
 
         const reader = response.body?.getReader();
@@ -699,7 +706,7 @@ export const useChat = () => {
                     );
                   }
                 } catch (e) {
-                  // Skip invalid JSON
+                  console.warn('Failed to parse streaming data:', data);
                 }
               }
             }
