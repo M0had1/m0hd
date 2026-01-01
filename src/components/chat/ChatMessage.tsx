@@ -168,7 +168,7 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
     <div
       className={cn(
         "group flex gap-4 px-4 py-6 animate-fade-in",
-        isUser ? "bg-transparent" : "bg-muted/30"
+        isUser ? "flex-row-reverse bg-transparent" : "flex-row bg-muted/30"
       )}
     >
       {/* Avatar */}
@@ -184,8 +184,8 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-center gap-2">
+      <div className={cn("flex-1 min-w-0 space-y-2", isUser && "text-right")}>
+        <div className={cn("flex items-center gap-2", isUser && "justify-end")}>
           <span className="font-medium text-sm">
             {isUser ? 'You' : "Mohamed's AI"}
           </span>
@@ -199,9 +199,13 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
         </div>
 
         {/* Attachments */}
-        {isUser && renderAttachments()}
+        {isUser && (
+          <div className="flex justify-end">
+            {renderAttachments()}
+          </div>
+        )}
 
-        <div className="text-foreground">
+        <div className={cn("text-foreground", isUser && "text-right")}>
           {renderContent()}
         </div>
 
