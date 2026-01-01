@@ -207,42 +207,46 @@ export const useChat = () => {
       }
 
       try {
-        // Load conversations
-        const { data: convData, error: convError } = await supabase
+        // Load conversations + messages in ONE request to avoid N+1 queries/timeouts
+        const { data, error } = await supabase
           .from('conversations')
-          .select('*')
-          .order('updated_at', { ascending: false });
+          .select(`
+            id,
+            title,
+            created_at,
+            updated_at,
+            messages (
+              id,
+              role,
+              content,
+              created_at,
+              attachments
+            )
+          `)
+          .order('updated_at', { ascending: false })
+          .limit(50)
+          .order('created_at', { ascending: true, referencedTable: 'messages' })
+          .limit(500, { referencedTable: 'messages' });
 
-        if (convError) throw convError;
+        if (error) throw error;
 
-        // Load messages for each conversation
-        const conversationsWithMessages: Conversation[] = await Promise.all(
-          (convData || []).map(async (conv) => {
-            const { data: msgData, error: msgError } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('conversation_id', conv.id)
-              .order('created_at', { ascending: true });
+        const conversationsWithMessages: Conversation[] = (data || []).map((conv: any) => {
+          const messages: Message[] = (conv.messages || []).map((msg: any) => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: new Date(msg.created_at),
+            attachments: msg.attachments as unknown as Attachment[] | undefined,
+          }));
 
-            if (msgError) throw msgError;
-
-            const messages: Message[] = (msgData || []).map((msg) => ({
-              id: msg.id,
-              role: msg.role as 'user' | 'assistant',
-              content: msg.content,
-              timestamp: new Date(msg.created_at),
-              attachments: msg.attachments as unknown as Attachment[] | undefined,
-            }));
-
-            return {
-              id: conv.id,
-              title: conv.title,
-              messages,
-              createdAt: new Date(conv.created_at),
-              updatedAt: new Date(conv.updated_at),
-            };
-          })
-        );
+          return {
+            id: conv.id,
+            title: conv.title,
+            messages,
+            createdAt: new Date(conv.created_at),
+            updatedAt: new Date(conv.updated_at),
+          };
+        });
 
         setConversations(conversationsWithMessages);
       } catch (error) {
