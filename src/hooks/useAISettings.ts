@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getMemoriesForAI } from '@/lib/memories';
 
 export interface AISettings {
@@ -21,6 +21,8 @@ const defaultSettings: AISettings = {
 
 export const useAISettings = () => {
   const [settings, setSettings] = useState<AISettings>(defaultSettings);
+  const [memoriesText, setMemoriesText] = useState<string>('');
+  const lastMemoriesLoadAtRef = useRef<number>(0);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('ai-settings');
@@ -31,6 +33,31 @@ export const useAISettings = () => {
         console.error('Failed to parse AI settings');
       }
     }
+  }, []);
+
+  // Load memories once (and refresh occasionally) to avoid delaying every message send.
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const now = Date.now();
+        // refresh at most once per minute
+        if (now - lastMemoriesLoadAtRef.current < 60_000) return;
+        lastMemoriesLoadAtRef.current = now;
+
+        const mem = await getMemoriesForAI();
+        if (!cancelled) setMemoriesText(mem || '');
+      } catch (e) {
+        // Do not block chat if memories fail to load
+        if (!cancelled) setMemoriesText('');
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const buildSystemPrompt = useCallback(async (): Promise<string> => {
@@ -113,14 +140,13 @@ export const useAISettings = () => {
     parts.push('- Web search: Real-time information is available when needed.');
     parts.push('Use markdown formatting for code blocks, lists, and emphasis.');
 
-    // Add persistent memories
-    const memories = await getMemoriesForAI();
-    if (memories) {
-      parts.push(memories);
+    // Add cached persistent memories (fast path)
+    if (memoriesText) {
+      parts.push(memoriesText);
     }
 
     return parts.join(' ');
-  }, [settings]);
+  }, [settings, memoriesText]);
 
   return {
     settings,
