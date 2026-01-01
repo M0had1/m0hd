@@ -670,6 +670,28 @@ export const useChat = () => {
         let fullContent = '';
         let buffer = '';
 
+        // Batch UI updates to avoid re-rendering on every token
+        let rafId: number | null = null;
+        let pendingContent = '';
+        const flushUiUpdate = () => {
+          rafId = null;
+          const next = pendingContent;
+          setConversations(prev => {
+            const convIdx = prev.findIndex(c => c.id === conversationId);
+            if (convIdx === -1) return prev;
+
+            const conv = prev[convIdx];
+            const nextMessages = conv.messages.map(msg =>
+              msg.id === assistantMessageId ? { ...msg, content: next } : msg
+            );
+
+            const nextConv = { ...conv, messages: nextMessages };
+            const copy = prev.slice();
+            copy[convIdx] = nextConv;
+            return copy;
+          });
+        };
+
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
@@ -683,27 +705,17 @@ export const useChat = () => {
               if (line.startsWith('data: ')) {
                 const data = line.slice(6).trim();
                 if (data === '[DONE]') continue;
-                
+
                 try {
                   const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content;
-                  if (content) {
-                    fullContent += content;
-                    
-                    setConversations(prev =>
-                      prev.map(conv =>
-                        conv.id === conversationId
-                          ? {
-                              ...conv,
-                              messages: conv.messages.map(msg =>
-                                msg.id === assistantMessageId
-                                  ? { ...msg, content: fullContent }
-                                  : msg
-                              ),
-                            }
-                          : conv
-                      )
-                    );
+                  const delta = parsed.choices?.[0]?.delta?.content;
+                  if (delta) {
+                    fullContent += delta;
+                    pendingContent = fullContent;
+
+                    if (rafId === null) {
+                      rafId = requestAnimationFrame(flushUiUpdate);
+                    }
                   }
                 } catch (e) {
                   console.warn('Failed to parse streaming data:', data);
@@ -712,6 +724,13 @@ export const useChat = () => {
             }
           }
         }
+
+        // Flush any remaining buffered UI update
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+        pendingContent = fullContent;
+        flushUiUpdate();
 
         // Mark streaming as complete
         setConversations(prev =>
