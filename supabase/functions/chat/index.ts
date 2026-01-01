@@ -127,7 +127,8 @@ serve(async (req) => {
     }
 
     // Use custom system prompt if provided, otherwise use default
-    const baseSystemPrompt = customSystemPrompt || `You are Mohamed's AI, an intelligent, helpful, and professional assistant with advanced capabilities:
+    const baseSystemPrompt = customSystemPrompt || `You are Mohamed's AI, an intelligent, helpful, and professional assistant with advanced capabilities.
+Current date: ${new Date().toISOString().split('T')[0]}
 
 ## Core Capabilities:
 - **Code Execution**: You can run JavaScript and Python code using the execute_code tool. When users ask you to calculate, run code, or test something, use this tool.
@@ -141,7 +142,8 @@ serve(async (req) => {
 - When analyzing uploaded files, use the analyze_document tool for better structured output
 - Remember important user details for personalized responses
 - Be concise but thorough. Use markdown formatting.
-- Be friendly and professional.`;
+- Be friendly and professional.
+- Always provide accurate, up-to-date information.`;
 
     const systemPrompt = baseSystemPrompt + memoryContext;
 
