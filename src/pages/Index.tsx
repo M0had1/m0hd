@@ -148,6 +148,8 @@ const Index = () => {
           onToggleSidebar={toggleSidebar}
           isSidebarOpen={isSidebarOpen && !isMobile}
           conversationId={activeConversationId || undefined}
+          conversation={activeConversation}
+          onClearConversation={() => activeConversationId && deleteConversation(activeConversationId)}
         />
 
         {/* Messages or Welcome Screen */}

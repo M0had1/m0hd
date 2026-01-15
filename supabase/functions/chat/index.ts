@@ -98,7 +98,10 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, systemPrompt: customSystemPrompt, conversationMemory } = await req.json();
+    const { messages, systemPrompt: customSystemPrompt, conversationMemory, model } = await req.json();
+    
+    // Default to Gemini 3 Flash if no model specified
+    const selectedModel = model || 'google/gemini-3-flash-preview';
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -155,7 +158,7 @@ Current date: ${new Date().toISOString().split('T')[0]}
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: selectedModel,
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages,
