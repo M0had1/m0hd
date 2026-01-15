@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Plus, MessageSquare, Trash2, Moon, Sun, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Conversation } from '@/types/chat';
 import { UserMenu } from '@/components/UserMenu';
+import { ConversationSearch } from './ConversationSearch';
 import { cn } from '@/lib/utils';
 
 interface ChatSidebarProps {
@@ -24,6 +26,21 @@ export const ChatSidebar = ({
   isDark,
   onToggleTheme,
 }: ChatSidebarProps) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter conversations based on search query
+  const filteredConversations = searchQuery.trim()
+    ? conversations.filter(conv => {
+        const query = searchQuery.toLowerCase();
+        // Search in title
+        if (conv.title.toLowerCase().includes(query)) return true;
+        // Search in message content
+        return conv.messages.some(msg => 
+          msg.content.toLowerCase().includes(query)
+        );
+      })
+    : conversations;
+
   return (
     <div className="flex h-full w-full flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header */}
@@ -39,23 +56,26 @@ export const ChatSidebar = ({
         </div>
         <Button 
           variant="gold" 
-          className="w-full justify-start gap-2"
+          className="w-full justify-start gap-2 mb-3"
           onClick={onNewChat}
         >
           <Plus className="h-4 w-4" />
           New Chat
         </Button>
+        
+        {/* Search */}
+        <ConversationSearch value={searchQuery} onChange={setSearchQuery} />
       </div>
 
       {/* Conversations List */}
       <ScrollArea className="flex-1 px-2 py-2">
         <div className="space-y-1">
-          {conversations.length === 0 ? (
+          {filteredConversations.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8 px-4">
-              No conversations yet. Start a new chat!
+              {searchQuery ? 'No conversations found' : 'No conversations yet. Start a new chat!'}
             </p>
           ) : (
-            conversations.map((conversation) => (
+            filteredConversations.map((conversation) => (
               <div
                 key={conversation.id}
                 className={cn(

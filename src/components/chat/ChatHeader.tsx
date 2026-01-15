@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, MoreHorizontal, Share2, Download, Code2, Smartphone } from 'lucide-react';
+import { Menu, MoreHorizontal, Share2, Trash2, Code2, Smartphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,15 +11,27 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ShareDialog } from './ShareDialog';
+import { ModelSelector } from './ModelSelector';
+import { ExportMenu } from './ExportMenu';
+import { Conversation } from '@/types/chat';
 
 interface ChatHeaderProps {
   title: string;
   onToggleSidebar: () => void;
   isSidebarOpen: boolean;
   conversationId?: string;
+  conversation?: Conversation;
+  onClearConversation?: () => void;
 }
 
-export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen, conversationId }: ChatHeaderProps) => {
+export const ChatHeader = ({ 
+  title, 
+  onToggleSidebar, 
+  isSidebarOpen, 
+  conversationId,
+  conversation,
+  onClearConversation,
+}: ChatHeaderProps) => {
   const navigate = useNavigate();
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -37,7 +49,7 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen, conversation
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Install App */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -45,6 +57,7 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen, conversation
                 variant="ghost" 
                 size="icon-sm" 
                 onClick={() => navigate('/install')}
+                className="hidden sm:flex"
               >
                 <Smartphone className="h-5 w-5" />
               </Button>
@@ -59,6 +72,7 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen, conversation
                 variant="ghost" 
                 size="icon-sm" 
                 onClick={() => navigate('/playground')}
+                className="hidden sm:flex"
               >
                 <Code2 className="h-5 w-5" />
               </Button>
@@ -67,36 +81,10 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen, conversation
           </Tooltip>
 
           {/* Model selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 px-3 text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald animate-pulse" />
-                  Gemini Flash
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald" />
-                  Gemini 2.5 Flash
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                  GPT-5 (Coming soon)
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-muted-foreground" />
-                  Gemini Pro (Coming soon)
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ModelSelector />
+
+          {/* Export Menu */}
+          <ExportMenu conversation={conversation} />
 
           {/* More options */}
           <DropdownMenu>
@@ -110,12 +98,21 @@ export const ChatHeader = ({ title, onToggleSidebar, isSidebarOpen, conversation
                 <Share2 className="h-4 w-4 mr-2" />
                 Share conversation
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Download className="h-4 w-4 mr-2" />
-                Export as PDF
+              <DropdownMenuItem onClick={() => navigate('/install')} className="sm:hidden">
+                <Smartphone className="h-4 w-4 mr-2" />
+                Install App
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/playground')} className="sm:hidden">
+                <Code2 className="h-4 w-4 mr-2" />
+                Code Playground
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem 
+                className="text-destructive"
+                onClick={onClearConversation}
+                disabled={!conversation?.messages?.length}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
                 Clear conversation
               </DropdownMenuItem>
             </DropdownMenuContent>

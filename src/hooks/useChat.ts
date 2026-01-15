@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Session } from '@supabase/supabase-js';
 import { useAISettings } from '@/hooks/useAISettings';
+import { useModelSelection } from '@/hooks/useModelSelection';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -181,6 +182,7 @@ export const useChat = () => {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const { buildSystemPrompt } = useAISettings();
+  const { selectedModel } = useModelSelection();
 
   // Get and track session for authenticated API calls
   useEffect(() => {
@@ -653,7 +655,7 @@ export const useChat = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({ messages: apiMessages, systemPrompt }),
+          body: JSON.stringify({ messages: apiMessages, systemPrompt, model: selectedModel }),
           signal: controller.signal,
         });
 
