@@ -150,24 +150,38 @@ Current date: ${new Date().toISOString().split('T')[0]}
 
     const systemPrompt = baseSystemPrompt + memoryContext;
 
-    // First, make a request to check if tools are needed
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ],
-        stream: true,
-        tools: tools,
-        tool_choice: "auto",
-      }),
-    });
+    // Helper function to make API request with retry logic
+    const makeRequest = async (attempt = 1): Promise<Response> => {
+      const maxAttempts = 3;
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages,
+          ],
+          stream: true,
+          tools: tools,
+          tool_choice: "auto",
+        }),
+      });
+
+      // Retry on 5xx errors (server-side/transient issues)
+      if (response.status >= 500 && attempt < maxAttempts) {
+        console.log(`Attempt ${attempt} failed with ${response.status}, retrying in ${attempt * 1000}ms...`);
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        return makeRequest(attempt + 1);
+      }
+
+      return response;
+    };
+
+    const response = await makeRequest();
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -182,6 +196,12 @@ Current date: ${new Date().toISOString().split('T')[0]}
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: 'Usage limit reached. Please add credits to continue.' }), {
           status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (response.status >= 500) {
+        return new Response(JSON.stringify({ error: 'AI service temporarily unavailable. Please try again.' }), {
+          status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
