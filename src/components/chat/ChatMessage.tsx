@@ -193,10 +193,13 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
             {isUser ? 'You' : "Mohamed's AI"}
           </span>
           {message.isStreaming && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="animate-typing">●</span>
-              <span className="animate-typing" style={{ animationDelay: '0.2s' }}>●</span>
-              <span className="animate-typing" style={{ animationDelay: '0.4s' }}>●</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground ml-2">
+              <span className="inline-flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms', animationDuration: '0.6s' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms', animationDuration: '0.6s' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms', animationDuration: '0.6s' }} />
+              </span>
+              <span className="text-muted-foreground/70">typing</span>
             </span>
           )}
         </div>
