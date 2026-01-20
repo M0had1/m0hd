@@ -13,6 +13,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  isError?: boolean;
   attachments?: Attachment[];
 }
 

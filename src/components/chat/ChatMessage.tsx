@@ -1,4 +1,4 @@
-import { User, Bot, Copy, Check, RefreshCw, FileText, Image as ImageIcon } from 'lucide-react';
+import { User, Bot, Copy, Check, RefreshCw, FileText, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
@@ -168,7 +168,8 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
     <div
       className={cn(
         "group flex gap-4 px-4 py-6 animate-fade-in",
-        isUser ? "flex-row-reverse bg-transparent" : "flex-row bg-muted/30"
+        isUser ? "flex-row-reverse bg-transparent" : "flex-row bg-muted/30",
+        message.isError && "bg-destructive/5"
       )}
     >
       {/* Avatar */}
@@ -177,10 +178,12 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
           isUser
             ? "bg-gradient-navy text-primary-foreground"
+            : message.isError
+            ? "bg-destructive/10 text-destructive"
             : "bg-gradient-gold text-navy-dark"
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+        {isUser ? <User className="h-4 w-4" /> : message.isError ? <AlertCircle className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
 
       {/* Content */}
