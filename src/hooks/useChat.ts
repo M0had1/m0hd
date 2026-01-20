@@ -661,13 +661,23 @@ export const useChat = () => {
 
         if (!response.ok) {
           const errorText = await response.text();
-          let errorMessage = `API error: ${response.status}`;
+          let errorMessage = 'Something went wrong. Please try again.';
           try {
             const errorData = JSON.parse(errorText);
             errorMessage = errorData.error || errorMessage;
           } catch {
-            errorMessage = errorText || errorMessage;
+            if (errorText) errorMessage = errorText;
           }
+          
+          // Handle specific error codes with user-friendly messages
+          if (response.status === 429) {
+            errorMessage = 'Too many requests. Please wait a moment and try again.';
+          } else if (response.status === 402) {
+            errorMessage = 'Usage limit reached. Please check your account.';
+          } else if (response.status === 503 || response.status >= 500) {
+            errorMessage = 'AI service is temporarily unavailable. Please try again in a few seconds.';
+          }
+          
           throw new Error(errorMessage);
         }
 
@@ -781,14 +791,16 @@ export const useChat = () => {
         );
       } else {
         console.error('Chat error:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
+        
         toast({
           title: 'Error',
-          description: error instanceof Error ? error.message : 'Failed to send message',
+          description: errorMsg,
           variant: 'destructive',
         });
         
-        // Update message with error state
-        const errorContent = 'Sorry, there was an error processing your request. Please try again.';
+        // Update message with error state - show user-friendly message
+        const errorContent = `⚠️ ${errorMsg}\n\nPlease try sending your message again.`;
         setConversations(prev =>
           prev.map(conv =>
             conv.id === conversationId
@@ -796,7 +808,7 @@ export const useChat = () => {
                   ...conv,
                   messages: conv.messages.map(msg =>
                     msg.id === assistantMessageId
-                      ? { ...msg, content: errorContent, isStreaming: false }
+                      ? { ...msg, content: errorContent, isStreaming: false, isError: true }
                       : msg
                   ),
                 }
@@ -804,12 +816,7 @@ export const useChat = () => {
           )
         );
 
-        // Save error message to database
-        await saveMessage(conversationId, {
-          ...assistantMessage,
-          content: errorContent,
-          isStreaming: false,
-        });
+        // Don't save error messages to database - allow retry
       }
     }
 
