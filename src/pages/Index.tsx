@@ -32,6 +32,7 @@ const Index = () => {
     setActiveConversationId,
     createNewConversation,
     deleteConversation,
+    clearAllConversations,
     sendMessage,
     stopGeneration,
   } = useChat();
@@ -113,6 +114,7 @@ const Index = () => {
       onNewChat={handleNewChat}
       onSelectConversation={handleSelectConversation}
       onDeleteConversation={deleteConversation}
+      onClearAllConversations={clearAllConversations}
       isDark={isDark}
       onToggleTheme={toggleTheme}
     />
