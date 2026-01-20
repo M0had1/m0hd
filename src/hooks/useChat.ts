@@ -356,6 +356,33 @@ export const useChat = () => {
     }
   }, [activeConversationId]);
 
+  const clearAllConversations = useCallback(async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+
+      setConversations([]);
+      setActiveConversationId(null);
+      toast({
+        title: 'Success',
+        description: 'All conversations have been deleted',
+      });
+    } catch (error) {
+      console.error('Error clearing conversations:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to clear conversations',
+        variant: 'destructive',
+      });
+    }
+  }, [session?.user?.id]);
+
   const saveMessage = useCallback(async (conversationId: string, message: Message) => {
     try {
       const { error } = await supabase
@@ -841,6 +868,7 @@ export const useChat = () => {
     createNewConversation,
     updateConversationTitle,
     deleteConversation,
+    clearAllConversations,
     sendMessage,
     stopGeneration,
   };
