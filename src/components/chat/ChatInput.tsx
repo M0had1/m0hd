@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, Image, X, Square, Camera, Phone } from 'lucide-react';
+import { Send, Paperclip, Mic, Image, X, Square, Camera, Phone, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CameraCapture } from './CameraCapture';
 import { PromptLibrary } from './PromptLibrary';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: File[]) => void;
@@ -19,6 +20,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -30,7 +32,6 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
     }
   }, [message]);
 
-  // Generate previews for image files
   useEffect(() => {
     const newPreviews: string[] = [];
     attachments.forEach((file) => {
@@ -68,9 +69,9 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      setAttachments((prev) => [...prev, ...files].slice(0, 10)); // Max 10 files
+      setAttachments((prev) => [...prev, ...files].slice(0, 10));
     }
-    e.target.value = ''; // Reset input
+    e.target.value = '';
   };
 
   const removeAttachment = (index: number) => {
@@ -88,7 +89,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
   };
 
   return (
-    <div className="border-t border-border bg-background/80 backdrop-blur-xl p-2 sm:p-4">
+    <div className="border-t border-border bg-background/80 backdrop-blur-xl p-3 sm:p-4">
       {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
@@ -107,21 +108,21 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
         accept="image/*"
       />
 
-      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto px-1 sm:px-0">
+      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
         {/* Attachments preview */}
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-3 animate-fade-in">
             {attachments.map((file, index) => (
               <div
                 key={index}
-                className="relative group flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-sm"
+                className="relative group flex items-center gap-2 px-3 py-2.5 bg-muted rounded-xl text-sm shadow-sm border border-border/30"
               >
                 {file.type.startsWith('image/') && previews[index] ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <img
                       src={previews[index]}
                       alt={file.name}
-                      className="w-10 h-10 object-cover rounded"
+                      className="w-10 h-10 object-cover rounded-lg"
                     />
                     <div className="flex flex-col">
                       <span className="truncate max-w-[120px] text-xs font-medium">
@@ -133,7 +134,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <Paperclip className="h-4 w-4 text-muted-foreground" />
                     <div className="flex flex-col">
                       <span className="truncate max-w-[120px] text-xs font-medium">
@@ -148,7 +149,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
                 <button
                   type="button"
                   onClick={() => removeAttachment(index)}
-                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -157,43 +158,59 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
           </div>
         )}
 
-        <div className="relative flex items-end gap-2 glass rounded-2xl p-2">
+        <div className={cn(
+          "relative flex items-end gap-2 rounded-2xl p-2.5 transition-all duration-200",
+          "bg-muted/60 border border-border/50",
+          isFocused && "border-primary/30 shadow-premium bg-background"
+        )}>
           {/* Attachment buttons */}
-          <div className="flex items-center gap-1 pb-1">
+          <div className="flex items-center gap-0.5 pb-0.5">
             <PromptLibrary onSelectPrompt={(prompt) => {
               setMessage(prompt);
               onPromptSelect?.(prompt);
             }} />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach file"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() => imageInputRef.current?.click()}
-              title="Attach image"
-            >
-              <Image className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() => setIsCameraOpen(true)}
-              title="Take photo"
-            >
-              <Camera className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Attach file</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <Image className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Attach image</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => setIsCameraOpen(true)}
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Take photo</TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Text input */}
@@ -202,29 +219,35 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
             placeholder="Message Mohamed's AI..."
             rows={1}
             className={cn(
               "flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground",
-              "focus:outline-none py-2 px-1 max-h-[200px]",
+              "focus:outline-none py-2 px-1 max-h-[200px] text-[0.9375rem]",
               "scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
             )}
             disabled={isLoading}
           />
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1 pb-1">
+          <div className="flex items-center gap-1 pb-0.5">
             {isVoiceSupported && onStartVoiceCall && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-primary hover:bg-primary/10"
-                onClick={onStartVoiceCall}
-                title="Start voice call"
-              >
-                <Phone className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                    onClick={onStartVoiceCall}
+                  >
+                    <Phone className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Start voice call</TooltipContent>
+              </Tooltip>
             )}
             {isLoading && onStop ? (
               <Button
@@ -232,9 +255,9 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
                 variant="destructive"
                 size="icon-sm"
                 onClick={onStop}
-                className="h-8 w-8 rounded-xl"
+                className="h-9 w-9 rounded-xl shadow-sm"
               >
-                <Square className="h-3 w-3 fill-current" />
+                <Square className="h-3.5 w-3.5 fill-current" />
               </Button>
             ) : (
               <Button
@@ -243,8 +266,10 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
                 size="icon-sm"
                 disabled={(!message.trim() && attachments.length === 0) || isLoading}
                 className={cn(
-                  "h-8 w-8 rounded-xl transition-all",
-                  (message.trim() || attachments.length > 0) && !isLoading ? "opacity-100" : "opacity-50"
+                  "h-9 w-9 rounded-xl transition-all shadow-sm",
+                  (message.trim() || attachments.length > 0) && !isLoading 
+                    ? "opacity-100 hover:shadow-premium" 
+                    : "opacity-50"
                 )}
               >
                 <Send className="h-4 w-4" />
@@ -253,7 +278,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground text-center mt-2 sm:mt-3 px-2">
+        <p className="text-xs text-muted-foreground/70 text-center mt-3 px-2">
           Mohamed's AI may make mistakes. Consider verifying important information.
         </p>
       </form>
