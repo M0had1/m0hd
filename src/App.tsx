@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Playground from "./pages/Playground";
+import CodeIDE from "./pages/CodeIDE";
 import Install from "./pages/Install";
 import SharedConversation from "./pages/SharedConversation";
 import NotFound from "./pages/NotFound";
@@ -38,6 +39,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Playground />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/ide" 
+              element={
+                <ProtectedRoute>
+                  <CodeIDE />
                 </ProtectedRoute>
               } 
             />

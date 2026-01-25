@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, MoreHorizontal, Share2, Trash2, Code2, Smartphone, Sparkles, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Menu, MoreHorizontal, Share2, Trash2, Code2, Smartphone, Sparkles, PanelLeftClose, PanelLeft, FolderCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -93,6 +93,21 @@ export const ChatHeader = ({
             <TooltipContent>Install App</TooltipContent>
           </Tooltip>
 
+          {/* Code IDE */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon-sm" 
+                onClick={() => navigate('/ide')}
+                className="hidden sm:flex h-9 w-9 hover:bg-muted"
+              >
+                <FolderCode className="h-[1.125rem] w-[1.125rem]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Code IDE</TooltipContent>
+          </Tooltip>
+
           {/* Code Playground */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -133,6 +148,10 @@ export const ChatHeader = ({
               <DropdownMenuItem onClick={() => navigate('/install')} className="sm:hidden gap-2.5">
                 <Smartphone className="h-4 w-4" />
                 Install App
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/ide')} className="sm:hidden gap-2.5">
+                <FolderCode className="h-4 w-4" />
+                Code IDE
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/playground')} className="sm:hidden gap-2.5">
                 <Code2 className="h-4 w-4" />
