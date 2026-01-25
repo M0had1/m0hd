@@ -4,7 +4,16 @@ interface WelcomeScreenProps {
   onSendMessage: (message: string) => void;
 }
 
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+};
+
 export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
+  const greeting = getGreeting();
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 animate-fade-in overflow-auto">
       {/* Logo */}
@@ -24,7 +33,7 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
 
       {/* Welcome text */}
       <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-3 text-center">
-        Welcome to Mohamed's AI
+        {greeting}! Welcome to Mohamed's AI
       </h1>
       <p className="text-muted-foreground text-center max-w-lg mb-10 text-base sm:text-lg px-4">
         Your intelligent assistant with code execution, document analysis, memory, and more.
