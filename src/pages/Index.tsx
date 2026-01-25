@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTheme } from 'next-themes';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -14,15 +15,16 @@ import { cn } from '@/lib/utils';
 
 const Index = () => {
   const isMobile = useIsMobile();
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pendingVoiceMessageRef = useRef<string | null>(null);
+
+  // Avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const {
     conversations,
@@ -48,7 +50,6 @@ const Index = () => {
   // Handle voice errors
   const handleVoiceError = useCallback((error: string) => {
     console.error('Voice error:', error);
-    // Could show a toast here if needed
   }, []);
 
   const {
@@ -70,9 +71,7 @@ const Index = () => {
     if (isVoiceMode && activeConversation?.messages.length) {
       const lastMessage = activeConversation.messages[activeConversation.messages.length - 1];
       
-      // Only speak if it's an assistant message that just finished streaming
       if (lastMessage.role === 'assistant' && !lastMessage.isStreaming && lastMessage.content) {
-        // Check if this is a response to a voice message
         if (pendingVoiceMessageRef.current) {
           pendingVoiceMessageRef.current = null;
           speak(lastMessage.content);
@@ -80,10 +79,6 @@ const Index = () => {
       }
     }
   }, [isVoiceMode, activeConversation?.messages, speak]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-  }, [isDark]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -94,7 +89,8 @@ const Index = () => {
     setIsSidebarOpen(!isMobile);
   }, [isMobile]);
 
-  const toggleTheme = () => setIsDark(!isDark);
+  const isDark = mounted ? resolvedTheme === 'dark' : false;
+  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const handleNewChat = () => {
