@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Code2, PanelLeftClose, PanelLeft, MessageSquare, X, Search, Command } from 'lucide-react';
+import { ArrowLeft, Code2, PanelLeftClose, PanelLeft, MessageSquare, X, Search, Command, Wand2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { FileTree } from '@/components/ide/FileTree';
@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useIDEKeyboard } from '@/hooks/useIDEKeyboard';
 import { toast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatCode, isFormattingSupported } from '@/lib/codeFormatter';
 
 export default function CodeIDE() {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function CodeIDE() {
   const [showAIChat, setShowAIChat] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [isFormatting, setIsFormatting] = useState(false);
 
   // Calculate file count
   const fileCount = useMemo(() => {
@@ -49,6 +51,60 @@ export default function CodeIDE() {
     setFileContents(new Map());
   }, []);
 
+  const findFileNode = useCallback((nodes: FileNode[], path: string): FileNode | null => {
+    for (const node of nodes) {
+      if (node.path === path) return node;
+      if (node.children) {
+        const found = findFileNode(node.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
+
+  // Format current file
+  const handleFormatCode = useCallback(async () => {
+    if (!activeFile) return;
+    
+    const content = fileContents.get(activeFile) || '';
+    const fileNode = findFileNode(files, activeFile);
+    const language = fileNode ? getLanguageFromFilename(fileNode.name) : 'plaintext';
+    
+    if (!isFormattingSupported(language)) {
+      toast({
+        title: 'Format not supported',
+        description: `Formatting is not available for ${language} files`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsFormatting(true);
+    try {
+      const { formatted, error } = await formatCode(content, language);
+      
+      if (error) {
+        toast({
+          title: 'Format error',
+          description: error,
+          variant: 'destructive',
+        });
+      } else {
+        setFileContents(prev => {
+          const next = new Map(prev);
+          next.set(activeFile, formatted);
+          return next;
+        });
+        toast({
+          title: 'Formatted',
+          description: 'Code formatted successfully',
+        });
+      }
+    } finally {
+      setIsFormatting(false);
+    }
+  }, [activeFile, fileContents, files, findFileNode]);
+
   // Keyboard shortcuts
   useIDEKeyboard({
     onSave: () => {
@@ -67,17 +123,6 @@ export default function CodeIDE() {
       }
     },
   });
-
-  const findFileNode = useCallback((nodes: FileNode[], path: string): FileNode | null => {
-    for (const node of nodes) {
-      if (node.path === path) return node;
-      if (node.children) {
-        const found = findFileNode(node.children, path);
-        if (found) return found;
-      }
-    }
-    return null;
-  }, []);
 
   const handleFilesLoaded = useCallback((loadedFiles: FileNode[]) => {
     setFiles(loadedFiles);
@@ -220,6 +265,30 @@ export default function CodeIDE() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Command Palette (Ctrl+Shift+P)</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFormatCode}
+                    disabled={!activeFile || isFormatting || !isFormattingSupported(activeLanguage)}
+                    className="h-8"
+                  >
+                    {isFormatting ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-4 w-4 mr-1.5" />
+                    )}
+                    Format
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isFormattingSupported(activeLanguage) 
+                    ? 'Format Code (Prettier)' 
+                    : `Formatting not supported for ${activeLanguage}`}
+                </TooltipContent>
               </Tooltip>
             </>
           )}
