@@ -403,6 +403,7 @@ export default function CodeIDE() {
                       activeFileContent={activeContent || null}
                       activeFileName={activeFileNode?.name || null}
                       onApplyChanges={handleApplyAIChanges}
+                      onLoadProject={handleFilesLoaded}
                     />
                   </div>
                 </ResizablePanel>
