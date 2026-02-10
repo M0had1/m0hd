@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Code2, PanelLeftClose, PanelLeft, MessageSquare, X, Search, Command, Wand2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Code2, PanelLeftClose, PanelLeft, MessageSquare, X, Search, Command, Wand2, Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { FileTree } from '@/components/ide/FileTree';
@@ -18,6 +18,7 @@ import { useIDEKeyboard } from '@/hooks/useIDEKeyboard';
 import { toast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatCode, isFormattingSupported } from '@/lib/codeFormatter';
+import { exportProjectAsZip } from '@/lib/exportProject';
 
 export default function CodeIDE() {
   const navigate = useNavigate();
@@ -289,6 +290,21 @@ export default function CodeIDE() {
                     ? 'Format Code (Prettier)' 
                     : `Formatting not supported for ${activeLanguage}`}
                 </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportProjectAsZip(files, fileContents)}
+                    className="h-8"
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    Export ZIP
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download project as ZIP</TooltipContent>
               </Tooltip>
             </>
           )}
