@@ -10,9 +10,7 @@ const corsHeaders = {
 interface MessageContent {
   type: 'text' | 'image_url';
   text?: string;
-  image_url?: {
-    url: string;
-  };
+  image_url?: { url: string };
 }
 
 interface ChatMessage {
@@ -23,31 +21,49 @@ interface ChatMessage {
 interface ToolCall {
   id: string;
   type: string;
-  function: {
-    name: string;
-    arguments: string;
-  };
+  function: { name: string; arguments: string };
 }
 
-// Tool definitions for the AI
 const tools = [
   {
     type: "function",
     function: {
-      name: "execute_code",
-      description: "Execute JavaScript or Python code and return the result. Use this when the user asks you to run, execute, calculate, or test code.",
+      name: "generate_project",
+      description: "Generate a complete project with multiple files and correct directory structure. Use this when the user asks to create a website, mobile app, web app, or any coding project. Return ALL files needed for a working project.",
       parameters: {
         type: "object",
         properties: {
-          code: {
-            type: "string",
-            description: "The code to execute"
+          project_name: { type: "string", description: "Name of the project" },
+          project_type: { type: "string", description: "Type: website, mobile-app, web-app, api, library, etc." },
+          language: { type: "string", description: "Primary language: javascript, typescript, python, html, react, react-native, flutter, swift, kotlin, vue, angular, svelte, php, ruby, go, rust, java, csharp, etc." },
+          files: {
+            type: "array",
+            description: "Array of all project files with their full paths and complete contents",
+            items: {
+              type: "object",
+              properties: {
+                path: { type: "string", description: "Full file path with directories, e.g. src/components/Header.tsx" },
+                content: { type: "string", description: "Complete file content" }
+              },
+              required: ["path", "content"]
+            }
           },
-          language: {
-            type: "string",
-            enum: ["javascript", "python"],
-            description: "The programming language"
-          }
+          description: { type: "string", description: "Brief description of the generated project" }
+        },
+        required: ["project_name", "files", "description", "language", "project_type"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "execute_code",
+      description: "Execute JavaScript or Python code and return the result.",
+      parameters: {
+        type: "object",
+        properties: {
+          code: { type: "string", description: "The code to execute" },
+          language: { type: "string", enum: ["javascript", "python"], description: "The programming language" }
         },
         required: ["code", "language"]
       }
@@ -56,40 +72,14 @@ const tools = [
   {
     type: "function",
     function: {
-      name: "analyze_document",
-      description: "Analyze and extract information from uploaded documents.",
-      parameters: {
-        type: "object",
-        properties: {
-          content: { type: "string", description: "The document content" },
-          fileName: { type: "string", description: "The file name" },
-          fileType: { type: "string", description: "The file type" }
-        },
-        required: ["content", "fileName"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
       name: "remember_user_info",
-      description: "IMPORTANT: Use this tool to remember important information about the user that should persist across all conversations. This includes: user's name, preferences, job/role, interests, goals, and any personal details they share. Call this whenever the user tells you their name or shares important personal information.",
+      description: "Remember important information about the user that should persist across conversations.",
       parameters: {
         type: "object",
         properties: {
-          key: {
-            type: "string",
-            description: "A short identifier (e.g., 'user_name', 'user_job', 'user_interest', 'user_preference')"
-          },
-          value: {
-            type: "string",
-            description: "The information to remember"
-          },
-          category: {
-            type: "string",
-            enum: ["personal", "preferences", "work", "interests", "general"],
-            description: "Category of the memory"
-          }
+          key: { type: "string", description: "A short identifier" },
+          value: { type: "string", description: "The information to remember" },
+          category: { type: "string", enum: ["personal", "preferences", "work", "interests", "general"], description: "Category" }
         },
         required: ["key", "value", "category"]
       }
@@ -104,21 +94,15 @@ serve(async (req) => {
 
   try {
     const { messages, systemPrompt: customSystemPrompt, model } = await req.json();
-    
     const selectedModel = model || 'google/gemini-3-flash-preview';
-    
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
-    }
+    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    // Get user from auth header
     const authHeader = req.headers.get('Authorization');
     let userId: string | null = null;
-    
     if (authHeader && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const token = authHeader.replace('Bearer ', '');
@@ -126,13 +110,9 @@ serve(async (req) => {
       userId = user?.id || null;
     }
 
-    if (!Array.isArray(messages)) {
-      throw new Error('Messages must be an array');
-    }
+    if (!Array.isArray(messages)) throw new Error('Messages must be an array');
 
-    console.log('Processing chat request with', messages.length, 'messages for user:', userId);
-
-    // Load user memories from database
+    // Load user memories
     let userMemories = '';
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -150,50 +130,285 @@ serve(async (req) => {
           if (!grouped[cat]) grouped[cat] = [];
           grouped[cat].push(`- ${mem.key}: ${mem.value}`);
         }
-        
         userMemories = '\n\n## What I Remember About You:\n';
         for (const [category, items] of Object.entries(grouped)) {
-          userMemories += `\n### ${category.charAt(0).toUpperCase() + category.slice(1)}\n`;
-          userMemories += items.join('\n');
+          userMemories += `\n### ${category.charAt(0).toUpperCase() + category.slice(1)}\n${items.join('\n')}`;
         }
       }
     }
 
-    const baseSystemPrompt = customSystemPrompt || `You are Mohamed's AI, an intelligent, helpful, and personalized assistant.
+    const baseSystemPrompt = customSystemPrompt || `You are an expert full-stack developer AI assistant integrated into a code IDE.
 Current date: ${new Date().toISOString().split('T')[0]}
 
-## CRITICAL: Memory Instructions
-You MUST use the remember_user_info tool when:
-1. The user tells you their name (save as key: "user_name", category: "personal")
-2. The user shares their job, profession, or role (save as key: "user_job", category: "work")
-3. The user mentions their interests or hobbies (save as key: "user_interest_*", category: "interests")
-4. The user states preferences (save as key: "user_preference_*", category: "preferences")
-5. Any other important personal detail they share
+## CRITICAL: Project Generation
+When a user asks you to create a website, mobile app, web app, or any project:
+1. ALWAYS use the generate_project tool to create the COMPLETE project with ALL necessary files
+2. Use the CORRECT directory structure for the chosen language/framework
+3. Include ALL configuration files (package.json, tsconfig, etc.)
+4. Write COMPLETE, production-ready code — not stubs or placeholders
+5. Follow the best practices and conventions of the chosen language/framework
 
-When you have the user's name, ALWAYS address them by name in your responses.
+## Directory Structure Guidelines by Framework:
 
-## Core Capabilities:
-- **Memory**: You remember everything about the user across all conversations. Use the remember_user_info tool to save new information.
-- **Code Execution**: Run JavaScript and Python code when requested.
-- **Document Analysis**: Analyze uploaded files.
-- **Image Analysis**: Describe and analyze images.
-- **Web Search**: Access real-time information when needed.
+### React / React + TypeScript
+\`\`\`
+project-name/
+├── package.json
+├── tsconfig.json (if TypeScript)
+├── vite.config.ts
+├── index.html
+├── public/
+│   └── favicon.ico
+├── src/
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── App.css
+│   ├── index.css
+│   ├── components/
+│   │   └── ComponentName.tsx
+│   ├── pages/
+│   │   └── PageName.tsx
+│   ├── hooks/
+│   │   └── useHookName.ts
+│   ├── utils/
+│   │   └── helpers.ts
+│   └── types/
+│       └── index.ts
+\`\`\`
 
-## Guidelines:
-- Be personalized - use the user's name and reference their preferences
-- Remember context from previous conversations
-- Be friendly, helpful, and professional
-- Use markdown formatting for clarity`;
+### React Native / Expo
+\`\`\`
+project-name/
+├── package.json
+├── app.json
+├── tsconfig.json
+├── App.tsx
+├── src/
+│   ├── screens/
+│   │   └── HomeScreen.tsx
+│   ├── components/
+│   │   └── ComponentName.tsx
+│   ├── navigation/
+│   │   └── AppNavigator.tsx
+│   ├── hooks/
+│   │   └── useHookName.ts
+│   ├── utils/
+│   │   └── helpers.ts
+│   ├── assets/
+│   └── types/
+│       └── index.ts
+\`\`\`
+
+### Flutter / Dart
+\`\`\`
+project-name/
+├── pubspec.yaml
+├── lib/
+│   ├── main.dart
+│   ├── screens/
+│   │   └── home_screen.dart
+│   ├── widgets/
+│   │   └── custom_widget.dart
+│   ├── models/
+│   │   └── data_model.dart
+│   ├── services/
+│   │   └── api_service.dart
+│   └── utils/
+│       └── constants.dart
+\`\`\`
+
+### Vue.js
+\`\`\`
+project-name/
+├── package.json
+├── vite.config.ts
+├── index.html
+├── src/
+│   ├── main.ts
+│   ├── App.vue
+│   ├── components/
+│   │   └── ComponentName.vue
+│   ├── views/
+│   │   └── HomeView.vue
+│   ├── router/
+│   │   └── index.ts
+│   ├── stores/
+│   │   └── useStore.ts
+│   └── assets/
+\`\`\`
+
+### Angular
+\`\`\`
+project-name/
+├── package.json
+├── angular.json
+├── tsconfig.json
+├── src/
+│   ├── main.ts
+│   ├── index.html
+│   ├── styles.css
+│   ├── app/
+│   │   ├── app.component.ts
+│   │   ├── app.component.html
+│   │   ├── app.module.ts
+│   │   ├── app-routing.module.ts
+│   │   └── components/
+│   │       └── component-name/
+│   │           ├── component-name.component.ts
+│   │           ├── component-name.component.html
+│   │           └── component-name.component.css
+\`\`\`
+
+### Plain HTML/CSS/JS
+\`\`\`
+project-name/
+├── index.html
+├── css/
+│   └── style.css
+├── js/
+│   └── main.js
+├── images/
+└── assets/
+\`\`\`
+
+### Next.js
+\`\`\`
+project-name/
+├── package.json
+├── next.config.js
+├── tsconfig.json
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── globals.css
+│   └── components/
+│       └── ComponentName.tsx
+├── public/
+│   └── favicon.ico
+└── lib/
+    └── utils.ts
+\`\`\`
+
+### Python (Flask/FastAPI)
+\`\`\`
+project-name/
+├── requirements.txt
+├── main.py (or app.py)
+├── config.py
+├── models/
+│   └── model.py
+├── routes/
+│   └── api.py
+├── services/
+│   └── service.py
+├── templates/
+│   └── index.html
+├── static/
+│   ├── css/
+│   └── js/
+└── utils/
+    └── helpers.py
+\`\`\`
+
+### Swift iOS
+\`\`\`
+project-name/
+├── Package.swift (or .xcodeproj)
+├── Sources/
+│   ├── App.swift
+│   ├── ContentView.swift
+│   ├── Views/
+│   │   └── HomeView.swift
+│   ├── Models/
+│   │   └── DataModel.swift
+│   ├── ViewModels/
+│   │   └── HomeViewModel.swift
+│   └── Services/
+│       └── APIService.swift
+\`\`\`
+
+### Kotlin Android
+\`\`\`
+project-name/
+├── build.gradle.kts
+├── app/
+│   ├── build.gradle.kts
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/com/example/app/
+│       │   ├── MainActivity.kt
+│       │   ├── ui/
+│       │   │   ├── screens/
+│       │   │   └── components/
+│       │   ├── data/
+│       │   │   └── models/
+│       │   └── viewmodel/
+│       └── res/
+│           ├── layout/
+│           └── values/
+\`\`\`
+
+### Svelte / SvelteKit
+\`\`\`
+project-name/
+├── package.json
+├── svelte.config.js
+├── vite.config.ts
+├── src/
+│   ├── app.html
+│   ├── routes/
+│   │   ├── +page.svelte
+│   │   └── +layout.svelte
+│   ├── lib/
+│   │   ├── components/
+│   │   └── utils/
+│   └── app.css
+\`\`\`
+
+### PHP (Laravel)
+\`\`\`
+project-name/
+├── composer.json
+├── routes/
+│   └── web.php
+├── app/
+│   ├── Http/Controllers/
+│   │   └── HomeController.php
+│   ├── Models/
+│   │   └── User.php
+│   └── Services/
+├── resources/views/
+│   └── welcome.blade.php
+├── public/
+│   └── index.php
+└── config/
+\`\`\`
+
+## Key Rules:
+- ALWAYS generate complete, runnable code — never use placeholder comments like "// add code here"
+- Include proper imports, exports, and dependencies
+- Use the user's preferred language when specified
+- For responsive websites, include mobile-first CSS
+- Include proper meta tags, SEO basics for web projects
+- Add meaningful comments explaining complex logic
+- Use modern best practices for the chosen framework
+- Include error handling and edge cases
+- If building a mobile app, use React Native/Expo or Flutter with proper navigation
+
+## Memory Instructions
+Use remember_user_info when the user shares personal info (name, preferences, etc.).
+
+## General Capabilities:
+- Explain, debug, refactor code
+- Generate complete projects
+- Run JavaScript and Python code
+- Analyze documents and images
+- Use markdown formatting`;
 
     const systemPrompt = baseSystemPrompt + userMemories;
 
-    // Helper function to save memory
     const saveMemory = async (key: string, value: string, category: string) => {
-      if (!userId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-        console.log('Cannot save memory: missing user or config');
-        return false;
-      }
-      
+      if (!userId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return false;
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const { error } = await supabase
         .from('user_memories')
@@ -201,19 +416,11 @@ When you have the user's name, ALWAYS address them by name in your responses.
           { user_id: userId, key, value, category, updated_at: new Date().toISOString() },
           { onConflict: 'user_id,key' }
         );
-      
-      if (error) {
-        console.error('Error saving memory:', error);
-        return false;
-      }
-      
-      console.log(`Saved memory: ${key} = ${value} (${category})`);
+      if (error) { console.error('Error saving memory:', error); return false; }
       return true;
     };
 
-    // Make initial request
     const makeRequest = async (msgs: any[], attempt = 1): Promise<Response> => {
-      const maxAttempts = 3;
       const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -222,41 +429,31 @@ When you have the user's name, ALWAYS address them by name in your responses.
         },
         body: JSON.stringify({
           model: selectedModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...msgs,
-          ],
-          stream: false, // Use non-streaming for tool handling
-          tools: tools,
+          messages: [{ role: 'system', content: systemPrompt }, ...msgs],
+          stream: false,
+          tools,
           tool_choice: "auto",
         }),
       });
-
-      if (response.status >= 500 && attempt < maxAttempts) {
-        console.log(`Attempt ${attempt} failed with ${response.status}, retrying...`);
-        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      if (response.status >= 500 && attempt < 3) {
+        await new Promise(r => setTimeout(r, attempt * 1000));
         return makeRequest(msgs, attempt + 1);
       }
-
       return response;
     };
 
-    // Process the request with tool handling
     let currentMessages = [...messages];
     let iterations = 0;
-    const maxIterations = 3;
     
-    while (iterations < maxIterations) {
+    while (iterations < 5) {
       iterations++;
-      
       const response = await makeRequest(currentMessages);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('AI error:', response.status, errorText);
-        
         if (response.status === 429) {
-          return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again.' }), {
+          return new Response(JSON.stringify({ error: 'Rate limit exceeded.' }), {
             status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
@@ -265,109 +462,75 @@ When you have the user's name, ALWAYS address them by name in your responses.
             status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        if (response.status >= 500) {
-          return new Response(JSON.stringify({ error: 'AI service temporarily unavailable.' }), {
-            status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        
         throw new Error(`AI API error: ${response.status}`);
       }
 
       const data = await response.json();
       const choice = data.choices?.[0];
-      
-      if (!choice) {
-        throw new Error('No response from AI');
-      }
+      if (!choice) throw new Error('No response from AI');
 
       const message = choice.message;
-      
-      // Check if AI wants to use tools
+
       if (message.tool_calls && message.tool_calls.length > 0) {
-        console.log('AI requested tool calls:', message.tool_calls.length);
-        
-        // Add assistant message with tool calls
         currentMessages.push({
           role: 'assistant',
           content: message.content || '',
           tool_calls: message.tool_calls,
         });
-        
-        // Process each tool call
+
         for (const toolCall of message.tool_calls as ToolCall[]) {
           const { name, arguments: argsString } = toolCall.function;
           let result = '';
-          
           try {
             const args = JSON.parse(argsString);
-            
-            if (name === 'remember_user_info') {
+            if (name === 'generate_project') {
+              // Return the project data as JSON so the frontend can parse and create files
+              result = JSON.stringify({
+                type: 'project_generation',
+                project_name: args.project_name,
+                project_type: args.project_type,
+                language: args.language,
+                description: args.description,
+                files: args.files,
+              });
+            } else if (name === 'remember_user_info') {
               const saved = await saveMemory(args.key, args.value, args.category || 'general');
-              result = saved 
-                ? `Successfully remembered: ${args.key} = "${args.value}"`
-                : 'Memory save failed';
+              result = saved ? `Remembered: ${args.key} = "${args.value}"` : 'Memory save failed';
             } else if (name === 'execute_code') {
               result = `Code execution requested for ${args.language}: ${args.code.substring(0, 100)}...`;
-            } else if (name === 'analyze_document') {
-              result = `Document analysis requested for: ${args.fileName}`;
             } else {
               result = `Unknown tool: ${name}`;
             }
           } catch (e) {
-            result = `Error processing tool call: ${e}`;
+            result = `Error: ${e}`;
           }
-          
-          // Add tool response
-          currentMessages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: result,
-          });
+          currentMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
         }
-        
-        // Continue to get final response
         continue;
       }
-      
-      // No tool calls, return the final response as a stream
+
+      // Final response — stream it
       const finalContent = message.content || '';
-      console.log('Final response ready, streaming...');
-      
-      // Create a streaming response
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          // Send the response as SSE chunks
-          const chunk = {
-            choices: [{
-              delta: { content: finalContent },
-              finish_reason: 'stop'
-            }]
-          };
+          const chunk = { choices: [{ delta: { content: finalContent }, finish_reason: 'stop' }] };
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         }
       });
-      
       return new Response(stream, {
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
+        headers: { ...corsHeaders, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
       });
     }
 
     throw new Error('Max iterations reached');
   } catch (error: unknown) {
-    console.error('Error in chat function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    console.error('Error:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
