@@ -54,6 +54,18 @@ export const FolderUpload = ({ onFilesLoaded }: FolderUploadProps) => {
       } else if (entry.isDirectory) {
         const dirEntry = entry as FileSystemDirectoryEntry;
         const dirReader = dirEntry.createReader();
+        const fullPath = path ? `${path}/${entry.name}` : entry.name;
+        
+        // Register the folder itself so empty folders are preserved
+        if (!fileMap.has(`__folder__${fullPath}`)) {
+          fileMap.set(`__folder__${fullPath}`, {
+            id: crypto.randomUUID(),
+            name: entry.name,
+            type: 'folder',
+            children: [],
+            path: fullPath,
+          });
+        }
         
         return new Promise((resolve) => {
           const readEntries = () => {
@@ -63,13 +75,11 @@ export const FolderUpload = ({ onFilesLoaded }: FolderUploadProps) => {
                 return;
               }
               
-              const fullPath = path ? `${path}/${entry.name}` : entry.name;
-              
               for (const childEntry of entries) {
                 await processEntry(childEntry, fullPath);
               }
               
-              readEntries(); // Continue reading if there are more entries
+              readEntries();
             });
           };
           readEntries();
@@ -92,22 +102,46 @@ export const FolderUpload = ({ onFilesLoaded }: FolderUploadProps) => {
     }
 
     // Build tree structure from flat file map
-    const buildTree = (files: Map<string, FileNode>): FileNode[] => {
+    const buildTree = (allEntries: Map<string, FileNode>): FileNode[] => {
       const root: FileNode[] = [];
       const folders = new Map<string, FileNode>();
 
-      // Sort paths to ensure parent folders are processed first
-      const sortedPaths = Array.from(files.keys()).sort();
+      // First pass: register all explicit folder entries
+      const folderKeys = Array.from(allEntries.keys()).filter(k => k.startsWith('__folder__')).sort();
+      for (const key of folderKeys) {
+        const folderNode = allEntries.get(key)!;
+        const parts = folderNode.path.split('/');
+        let parent: FileNode[] = root;
+        let currentPath = '';
 
-      for (const path of sortedPaths) {
-        const file = files.get(path)!;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+          if (!folders.has(currentPath)) {
+            const folder: FileNode = {
+              id: i === parts.length - 1 ? folderNode.id : crypto.randomUUID(),
+              name: part,
+              type: 'folder',
+              children: [],
+              path: currentPath,
+            };
+            folders.set(currentPath, folder);
+            parent.push(folder);
+          }
+          parent = folders.get(currentPath)!.children!;
+        }
+      }
+
+      // Second pass: add files
+      const fileKeys = Array.from(allEntries.keys()).filter(k => !k.startsWith('__folder__')).sort();
+      for (const path of fileKeys) {
+        const file = allEntries.get(path)!;
         const parts = path.split('/');
         
         if (parts.length === 1) {
-          // Root level file
           root.push(file);
         } else {
-          // Nested file - ensure parent folders exist
           let currentPath = '';
           let parent: FileNode[] = root;
 
@@ -151,12 +185,17 @@ export const FolderUpload = ({ onFilesLoaded }: FolderUploadProps) => {
     };
 
     const tree = buildTree(fileMap);
+    const fileCount = Array.from(fileMap.keys()).filter(k => !k.startsWith('__folder__')).length;
+    const folderCount = Array.from(fileMap.keys()).filter(k => k.startsWith('__folder__')).length;
     
     if (tree.length > 0) {
       onFilesLoaded(tree);
-      toast.success(`Loaded ${fileMap.size} files`);
+      const parts = [];
+      if (fileCount > 0) parts.push(`${fileCount} files`);
+      if (folderCount > 0) parts.push(`${folderCount} folders`);
+      toast.success(`Loaded ${parts.join(' and ')}`);
     } else {
-      toast.error('No readable files found');
+      toast.error('No files or folders found');
     }
   }, [onFilesLoaded]);
 

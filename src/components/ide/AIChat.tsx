@@ -30,6 +30,7 @@ interface ProjectData {
 interface AIChatProps {
   activeFileContent: string | null;
   activeFileName: string | null;
+  existingFiles: FileNode[];
   onApplyChanges: (newContent: string) => void;
   onLoadProject?: (files: FileNode[]) => void;
 }
@@ -94,7 +95,7 @@ function buildFileTree(projectFiles: ProjectFile[], projectName: string): FileNo
   return root;
 }
 
-export const AIChat = ({ activeFileContent, activeFileName, onApplyChanges, onLoadProject }: AIChatProps) => {
+export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApplyChanges, onLoadProject }: AIChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -103,6 +104,20 @@ export const AIChat = ({ activeFileContent, activeFileName, onApplyChanges, onLo
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Helper to serialize existing folder structure for context
+  const getStructureDescription = (): string => {
+    const paths: string[] = [];
+    const collect = (nodes: FileNode[], prefix = '') => {
+      for (const node of nodes) {
+        const p = prefix ? `${prefix}/${node.name}` : node.name;
+        paths.push(node.type === 'folder' ? `${p}/` : p);
+        if (node.children) collect(node.children, p);
+      }
+    };
+    collect(existingFiles);
+    return paths.join('\n');
+  };
 
   const sendMessage = async (prompt: string) => {
     if (!prompt.trim() || isLoading) return;
@@ -115,9 +130,16 @@ export const AIChat = ({ activeFileContent, activeFileName, onApplyChanges, onLo
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      const contextPrompt = activeFileContent 
-        ? `I'm working on a file called "${activeFileName}". Here's the code:\n\n\`\`\`\n${activeFileContent}\n\`\`\`\n\n${prompt}`
-        : prompt;
+      // Build context with existing folder structure
+      let contextPrompt = '';
+      const structure = getStructureDescription();
+      if (structure) {
+        contextPrompt += `The user has the following project folder structure already loaded in the IDE:\n\`\`\`\n${structure}\n\`\`\`\nWhen generating files, place them into the existing folders where appropriate. Create new folders only if needed.\n\n`;
+      }
+      if (activeFileContent) {
+        contextPrompt += `I'm working on a file called "${activeFileName}". Here's the code:\n\n\`\`\`\n${activeFileContent}\n\`\`\`\n\n`;
+      }
+      contextPrompt += prompt;
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
@@ -198,8 +220,34 @@ export const AIChat = ({ activeFileContent, activeFileName, onApplyChanges, onLo
 
   const loadProject = (projectData: ProjectData) => {
     if (!onLoadProject) return;
-    const tree = buildFileTree(projectData.files, projectData.project_name);
-    onLoadProject(tree);
+    const generatedTree = buildFileTree(projectData.files, projectData.project_name);
+    
+    // Merge generated files into existing tree if there are existing files
+    if (existingFiles.length > 0) {
+      const merged = mergeFileTrees(existingFiles, generatedTree);
+      onLoadProject(merged);
+    } else {
+      onLoadProject(generatedTree);
+    }
+  };
+
+  // Deep-merge two file trees: generated files go into matching existing folders
+  const mergeFileTrees = (existing: FileNode[], generated: FileNode[]): FileNode[] => {
+    const result: FileNode[] = existing.map(n => ({ ...n, children: n.children ? [...n.children] : undefined }));
+    
+    for (const genNode of generated) {
+      const match = result.find(n => n.name === genNode.name && n.type === genNode.type);
+      if (match && match.type === 'folder' && genNode.children && match.children) {
+        match.children = mergeFileTrees(match.children, genNode.children);
+      } else if (!match) {
+        result.push(genNode);
+      }
+      // If same-name file exists, replace it with generated version
+      else if (match && match.type === 'file') {
+        Object.assign(match, genNode);
+      }
+    }
+    return result;
   };
 
   return (
