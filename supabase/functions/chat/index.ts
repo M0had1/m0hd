@@ -510,12 +510,30 @@ Use remember_user_info when the user shares personal info (name, preferences, et
       }
 
       // Final response — stream it
-      const finalContent = message.content || '';
+      let finalContent = message.content || '';
+      
+      // Check if any tool call produced project generation data and append it
+      for (const msg of currentMessages) {
+        if (msg.role === 'tool' && typeof msg.content === 'string') {
+          try {
+            const parsed = JSON.parse(msg.content);
+            if (parsed.type === 'project_generation') {
+              finalContent += '\n\n' + msg.content;
+            }
+          } catch { /* not JSON, skip */ }
+        }
+      }
+      
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          const chunk = { choices: [{ delta: { content: finalContent }, finish_reason: 'stop' }] };
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          // Send content in smaller chunks to avoid parsing issues
+          const chunkSize = 4000;
+          for (let i = 0; i < finalContent.length; i += chunkSize) {
+            const part = finalContent.slice(i, i + chunkSize);
+            const chunk = { choices: [{ delta: { content: part }, finish_reason: null }] };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         }
