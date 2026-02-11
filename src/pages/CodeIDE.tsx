@@ -418,6 +418,7 @@ export default function CodeIDE() {
                     <AIChat
                       activeFileContent={activeContent || null}
                       activeFileName={activeFileNode?.name || null}
+                      existingFiles={files}
                       onApplyChanges={handleApplyAIChanges}
                       onLoadProject={handleFilesLoaded}
                     />
