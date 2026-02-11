@@ -53,12 +53,34 @@ const projectTemplates = [
 
 function tryExtractProjectData(text: string): ProjectData | null {
   try {
-    const match = text.match(/\{"type"\s*:\s*"project_generation"[\s\S]*?\}(?=\s*$|\n)/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      if (parsed.type === 'project_generation' && parsed.files) return parsed;
+    // Find the JSON object with type: "project_generation" anywhere in the text
+    const startIndex = text.indexOf('{"type":"project_generation"');
+    if (startIndex === -1) {
+      // Try with spaces around colon
+      const altIndex = text.indexOf('{"type": "project_generation"');
+      if (altIndex === -1) return null;
+      return parseProjectJson(text, altIndex);
     }
+    return parseProjectJson(text, startIndex);
   } catch { /* ignore */ }
+  return null;
+}
+
+function parseProjectJson(text: string, startIndex: number): ProjectData | null {
+  // Find matching closing brace by counting braces
+  let depth = 0;
+  for (let i = startIndex; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(text.substring(startIndex, i + 1));
+          if (parsed.type === 'project_generation' && parsed.files) return parsed;
+        } catch { /* continue searching */ }
+      }
+    }
+  }
   return null;
 }
 
@@ -155,7 +177,21 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to get AI response');
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errData = await response.json();
+          throw new Error(errData.error || `Error ${response.status}`);
+        }
+        throw new Error(`Failed to get AI response (${response.status})`);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('text/event-stream')) {
+        // Non-streaming response - try to read as JSON
+        const text = await response.text();
+        throw new Error(`Unexpected response format: ${text.substring(0, 200)}`);
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No reader');
