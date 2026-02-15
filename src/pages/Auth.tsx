@@ -36,7 +36,7 @@ export default function Auth() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { signIn, signUp, signInWithGoogle, isAuthenticated, loading } = useAuth();
+  const { signIn, signUp, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
@@ -118,8 +118,18 @@ export default function Auth() {
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
-    await signInWithGoogle();
-    setIsGoogleLoading(false);
+    try {
+      const { error } = await lovable.auth.signInWithOAuth('google', {
+        redirect_uri: window.location.origin,
+      });
+      if (error) {
+        console.error('Google sign in error:', error);
+      }
+    } catch (err) {
+      console.error('Google sign in failed:', err);
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleAppleSignIn = async () => {
