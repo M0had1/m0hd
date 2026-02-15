@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logoImage from '@/assets/logo.jpg';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
@@ -168,9 +169,7 @@ export default function Auth() {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8 animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-gold flex items-center justify-center shadow-premium-lg mb-4">
-            <span className="text-3xl font-bold" style={{ color: 'hsl(222, 47%, 11%)' }}>M</span>
-          </div>
+           <img src={logoImage} alt="Mohamed's AI" className="w-16 h-16 rounded-2xl shadow-premium-lg mb-4 object-cover" />
           <h1 className="text-2xl font-semibold text-foreground">Mohamed's AI</h1>
           <p className="text-muted-foreground mt-1">Intelligent Assistant</p>
         </div>

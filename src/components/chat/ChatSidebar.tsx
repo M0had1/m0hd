@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import logoImage from '@/assets/logo.jpg';
 import { Plus, MessageSquare, Trash2, Moon, Sun, Settings, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -120,8 +121,8 @@ export const ChatSidebar = ({
         <div className="p-4 pb-3">
           <div className="flex items-center gap-3 mb-5">
             <div className="relative">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-gold flex items-center justify-center shadow-premium hover-glow transition-all">
-                <span className="text-navy-dark font-bold text-xl">M</span>
+              <div className="w-11 h-11 rounded-2xl shadow-premium hover-glow transition-all overflow-hidden">
+                <img src={logoImage} alt="Mohamed's AI" className="w-full h-full object-cover" />
               </div>
               <div className="absolute -top-1 -right-1">
                 <Sparkles className="h-3.5 w-3.5 text-gold animate-pulse-slow" />

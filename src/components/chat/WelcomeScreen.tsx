@@ -1,4 +1,5 @@
 import { Sparkles } from 'lucide-react';
+import logoImage from '@/assets/logo.jpg';
 
 interface WelcomeScreenProps {
   onSendMessage: (message: string) => void;
@@ -18,8 +19,8 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
     <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 animate-fade-in overflow-auto">
       {/* Logo */}
       <div className="mb-8 relative">
-        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-gold flex items-center justify-center shadow-premium-lg animate-float">
-          <span className="text-navy-dark font-bold text-4xl sm:text-5xl">M</span>
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl shadow-premium-lg animate-float overflow-hidden">
+          <img src={logoImage} alt="Mohamed's AI" className="w-full h-full object-cover" />
         </div>
         <div className="absolute -top-2 -right-2">
           <div className="relative">
