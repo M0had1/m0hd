@@ -79,7 +79,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
       const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognitionClass) {
         const recognition = new SpeechRecognitionClass();
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognition.interimResults = false;
         recognition.lang = 'en-US';
 
@@ -98,6 +98,16 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
         recognition.onend = () => {
           console.log('Speech recognition ended');
           setIsListening(false);
+          // Auto-restart if still in voice mode and not speaking
+          if (isVoiceModeRef.current) {
+            setTimeout(() => {
+              try {
+                recognitionRef.current?.start();
+              } catch (e) {
+                console.error('Error auto-restarting recognition:', e);
+              }
+            }, 300);
+          }
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
