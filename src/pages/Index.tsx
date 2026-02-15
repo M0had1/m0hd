@@ -43,7 +43,7 @@ const Index = () => {
   const handleVoiceTranscript = useCallback((transcript: string) => {
     if (transcript.trim()) {
       pendingVoiceMessageRef.current = transcript;
-      sendMessage(transcript);
+      sendMessage(transcript, undefined, { voiceMode: true });
     }
   }, [sendMessage]);
 

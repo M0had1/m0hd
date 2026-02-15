@@ -413,7 +413,7 @@ export const useChat = () => {
     }
   }, []);
 
-  const sendMessage = useCallback(async (content: string, files?: File[]): Promise<void> => {
+  const sendMessage = useCallback(async (content: string, files?: File[], options?: { voiceMode?: boolean }): Promise<void> => {
     let conversationId = activeConversationId;
     
     if (!conversationId) {
@@ -674,7 +674,12 @@ export const useChat = () => {
         }
 
         // Build custom system prompt from settings
-        const systemPrompt = await buildSystemPrompt();
+        let systemPrompt = await buildSystemPrompt();
+        
+        // Override with voice mode prompt for natural conversation
+        if (options?.voiceMode) {
+          systemPrompt = `You are having a casual, natural voice conversation with your friend. Keep your responses SHORT (1-3 sentences max), conversational, and warm — like talking on the phone. Don't use markdown, bullet points, code blocks, or any formatting. Don't say "Sure!" or "Of course!" too much. Just talk naturally like a real person would. Be friendly, witty, and engaging. If they ask something complex, give a brief answer and ask if they want more detail.`;
+        }
 
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
           method: 'POST',
