@@ -126,9 +126,27 @@ serve(async (req) => {
   try {
     const { content, fileName, fileType, fileSize, analysisType = 'full' } = await req.json();
 
-    if (!content || !fileName) {
+    if (!content || typeof content !== 'string') {
       return new Response(
-        JSON.stringify({ success: false, error: 'Content and fileName are required' }),
+        JSON.stringify({ success: false, error: 'Content is required and must be a string' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!fileName || typeof fileName !== 'string') {
+      return new Response(
+        JSON.stringify({ success: false, error: 'fileName is required and must be a string' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (content.length > 500000) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Content too large (max 500KB)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (fileName.length > 255 || /[\/\\]/.test(fileName)) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid fileName' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

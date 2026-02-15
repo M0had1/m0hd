@@ -14,7 +14,23 @@ serve(async (req) => {
 
   try {
     const { prompt, imageUrl, mode } = await req.json();
-    
+
+    if (!prompt || typeof prompt !== 'string') {
+      return new Response(JSON.stringify({ error: 'Prompt is required and must be a string' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (prompt.length > 2000) {
+      return new Response(JSON.stringify({ error: 'Prompt too long (max 2000 characters)' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (imageUrl && (typeof imageUrl !== 'string' || imageUrl.length > 5000)) {
+      return new Response(JSON.stringify({ error: 'Invalid imageUrl' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       console.error('LOVABLE_API_KEY is not configured');

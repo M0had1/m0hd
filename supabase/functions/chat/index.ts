@@ -111,6 +111,13 @@ serve(async (req) => {
     }
 
     if (!Array.isArray(messages)) throw new Error('Messages must be an array');
+    if (messages.length > 100) throw new Error('Too many messages (max 100)');
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object') throw new Error('Invalid message format');
+      if (!msg.role || typeof msg.role !== 'string') throw new Error('Message role is required');
+      if (!['user', 'assistant', 'system'].includes(msg.role)) throw new Error('Invalid message role');
+      if (typeof msg.content === 'string' && msg.content.length > 50000) throw new Error('Message content too long (max 50000 chars)');
+    }
 
     // Load user memories
     let userMemories = '';

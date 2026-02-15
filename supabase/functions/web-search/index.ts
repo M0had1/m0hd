@@ -13,9 +13,16 @@ serve(async (req) => {
   try {
     const { query } = await req.json();
 
-    if (!query) {
+    if (!query || typeof query !== 'string') {
       return new Response(
-        JSON.stringify({ error: 'Query is required' }),
+        JSON.stringify({ error: 'Query is required and must be a string' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (query.length > 500) {
+      return new Response(
+        JSON.stringify({ error: 'Query too long (max 500 characters)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
