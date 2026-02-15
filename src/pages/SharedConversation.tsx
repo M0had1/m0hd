@@ -27,8 +27,14 @@ export default function SharedConversation() {
   }, [token]);
 
   const fetchSharedConversation = async () => {
+    if (!token || token.length > 64) {
+      setError('Invalid share link.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Get shared conversation details
+      // Get shared conversation details (anon policy allows this)
       const { data: shareData, error: shareError } = await supabase
         .from('shared_conversations')
         .select('conversation_id, expires_at')
@@ -37,19 +43,53 @@ export default function SharedConversation() {
 
       if (shareError || !shareData) {
         setError('This shared conversation was not found or has been removed.');
+        setLoading(false);
         return;
       }
 
       // Check expiry
       if (shareData.expires_at && new Date(shareData.expires_at) < new Date()) {
         setError('This shared link has expired.');
+        setLoading(false);
         return;
       }
 
-      // Fetch conversation and messages using service role through edge function would be needed
-      // For now, we'll show a placeholder since RLS prevents public access
-      setError('Shared conversations require public access configuration.');
-      
+      // Fetch conversation (anon policy allows shared conversations)
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .select('id, title, created_at')
+        .eq('id', shareData.conversation_id)
+        .single();
+
+      if (convError || !conversation) {
+        setError('Failed to load the shared conversation.');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch messages (anon policy allows messages in shared conversations)
+      const { data: messages, error: msgError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', shareData.conversation_id)
+        .order('created_at', { ascending: true });
+
+      if (msgError) {
+        setError('Failed to load messages.');
+        setLoading(false);
+        return;
+      }
+
+      setData({
+        conversation,
+        messages: (messages || []).map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date(m.created_at),
+          attachments: m.attachments as unknown as Message['attachments'],
+        })),
+      });
     } catch (err) {
       console.error('Error fetching shared conversation:', err);
       setError('Failed to load the shared conversation.');
