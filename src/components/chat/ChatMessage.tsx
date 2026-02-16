@@ -26,6 +26,33 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
         if (line.startsWith('```')) {
           return null;
         }
+        // Render markdown images: ![alt](url)
+        const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+        if (imgRegex.test(line)) {
+          imgRegex.lastIndex = 0;
+          const parts: React.ReactNode[] = [];
+          let lastIdx = 0;
+          let imgMatch;
+          while ((imgMatch = imgRegex.exec(line)) !== null) {
+            if (imgMatch.index > lastIdx) {
+              parts.push(<span key={`t${i}-${lastIdx}`}>{line.slice(lastIdx, imgMatch.index)}</span>);
+            }
+            parts.push(
+              <img
+                key={`img${i}-${imgMatch.index}`}
+                src={imgMatch[2]}
+                alt={imgMatch[1] || 'Generated Image'}
+                className="max-w-full rounded-xl my-2 shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => window.open(imgMatch![2], '_blank')}
+              />
+            );
+            lastIdx = imgMatch.index + imgMatch[0].length;
+          }
+          if (lastIdx < line.length) {
+            parts.push(<span key={`te${i}`}>{line.slice(lastIdx)}</span>);
+          }
+          return <div key={i}>{parts}</div>;
+        }
         if (line.startsWith('### ')) {
           return <h3 key={i} className="font-semibold text-base mt-4 mb-2">{line.slice(4)}</h3>;
         }
