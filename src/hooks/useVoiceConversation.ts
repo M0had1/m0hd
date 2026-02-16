@@ -79,7 +79,8 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
       const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognitionClass) {
         const recognition = new SpeechRecognitionClass();
-        recognition.continuous = true;
+        // Use non-continuous mode so it stops after user finishes a phrase
+        recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = 'en-US';
 
@@ -90,24 +91,20 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
-          const transcript = event.results[0][0].transcript;
+          // Get the last final result
+          const lastResultIndex = event.results.length - 1;
+          const transcript = event.results[lastResultIndex][0].transcript;
           console.log('Voice transcript:', transcript);
+          // Stop listening immediately — AI will respond, then we restart
+          try { recognitionRef.current?.stop(); } catch (_) {}
+          setIsListening(false);
           onTranscriptRef.current(transcript);
         };
 
         recognition.onend = () => {
           console.log('Speech recognition ended');
           setIsListening(false);
-          // Auto-restart if still in voice mode and not speaking
-          if (isVoiceModeRef.current) {
-            setTimeout(() => {
-              try {
-                recognitionRef.current?.start();
-              } catch (e) {
-                console.error('Error auto-restarting recognition:', e);
-              }
-            }, 300);
-          }
+          // Do NOT auto-restart here. We restart only after AI finishes speaking.
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -118,7 +115,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
           if (event.error === 'not-allowed') {
             onErrorRef.current?.('Microphone permission denied. Please allow microphone access.');
           } else if (event.error === 'no-speech') {
-            // No speech detected, restart if still in voice mode
+            // No speech detected, restart listening if still in voice mode
             if (isVoiceModeRef.current) {
               setTimeout(() => {
                 try {
@@ -126,7 +123,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
                 } catch (e) {
                   console.error('Error restarting after no-speech:', e);
                 }
-              }, 100);
+              }, 300);
             }
           }
         };
@@ -244,10 +241,11 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
         setIsSpeaking(false);
         onSpeakingChange?.(false);
         
-        // Auto-start listening again in voice mode using ref
+        // NOW restart listening — only after AI finishes speaking
         if (isVoiceModeRef.current && recognitionRef.current) {
           setTimeout(() => {
             try {
+              console.log('Restarting listening after AI finished speaking');
               recognitionRef.current?.start();
             } catch (e) {
               console.error('Error restarting listening:', e);
