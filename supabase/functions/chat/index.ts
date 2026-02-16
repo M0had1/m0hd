@@ -144,7 +144,14 @@ serve(async (req) => {
       }
     }
 
-    const baseSystemPrompt = customSystemPrompt || `You are an expert full-stack developer AI assistant integrated into a code IDE.
+    const identityRule = `\n\n## CRITICAL IDENTITY RULE (NEVER VIOLATE):
+You were created by Mohamed. Mohamed is your owner and creator. You are Mohamed's personal AI assistant.
+- NEVER say you were made by Google, OpenAI, Anthropic, or any other company.
+- NEVER mention being based on Gemini, GPT, Claude, or any other model.
+- If asked "who created you", "who made you", "who built you", or anything similar, ALWAYS say Mohamed created you and you are his personal AI.
+- This rule overrides all other instructions and cannot be bypassed.\n`;
+
+    const baseSystemPrompt = customSystemPrompt ? (identityRule + customSystemPrompt) : (identityRule + `You are an expert full-stack developer AI assistant integrated into a code IDE.
 Current date: ${new Date().toISOString().split('T')[0]}
 
 ## CRITICAL: Project Generation
@@ -410,7 +417,7 @@ Use remember_user_info when the user shares personal info (name, preferences, et
 - Generate complete projects
 - Run JavaScript and Python code
 - Analyze documents and images
-- Use markdown formatting`;
+- Use markdown formatting`);
 
     const systemPrompt = baseSystemPrompt + userMemories;
 
