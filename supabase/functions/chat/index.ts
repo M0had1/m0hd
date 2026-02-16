@@ -57,6 +57,20 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "generate_image",
+      description: "Generate an image based on the user's description or prompt. Use this whenever the user asks you to create, generate, draw, paint, sketch, design, illustrate, or make an image, picture, artwork, illustration, logo, icon, or any visual content.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "A detailed description of the image to generate" }
+        },
+        required: ["prompt"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "execute_code",
       description: "Execute JavaScript or Python code and return the result.",
       parameters: {
@@ -498,7 +512,6 @@ Use remember_user_info when the user shares personal info (name, preferences, et
           try {
             const args = JSON.parse(argsString);
             if (name === 'generate_project') {
-              // Return the project data as JSON so the frontend can parse and create files
               result = JSON.stringify({
                 type: 'project_generation',
                 project_name: args.project_name,
@@ -507,6 +520,38 @@ Use remember_user_info when the user shares personal info (name, preferences, et
                 description: args.description,
                 files: args.files,
               });
+            } else if (name === 'generate_image') {
+              // Call the image generation API
+              try {
+                const imgResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    model: 'google/gemini-2.5-flash-image',
+                    messages: [{ role: 'user', content: args.prompt }],
+                    modalities: ['image', 'text'],
+                  }),
+                });
+                if (imgResponse.ok) {
+                  const imgData = await imgResponse.json();
+                  const imageUrl = imgData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+                  if (imageUrl) {
+                    result = JSON.stringify({ type: 'image_generation', imageUrl, prompt: args.prompt });
+                  } else {
+                    result = 'Image generation did not return an image. Please try a different prompt.';
+                  }
+                } else {
+                  const errText = await imgResponse.text();
+                  console.error('Image gen error:', imgResponse.status, errText);
+                  result = `Image generation failed (${imgResponse.status}). Please try again.`;
+                }
+              } catch (imgErr) {
+                console.error('Image gen exception:', imgErr);
+                result = 'Image generation failed. Please try again.';
+              }
             } else if (name === 'remember_user_info') {
               const saved = await saveMemory(args.key, args.value, args.category || 'general');
               result = saved ? `Remembered: ${args.key} = "${args.value}"` : 'Memory save failed';
@@ -526,13 +571,15 @@ Use remember_user_info when the user shares personal info (name, preferences, et
       // Final response — stream it
       let finalContent = message.content || '';
       
-      // Check if any tool call produced project generation data and append it
+      // Check if any tool call produced structured data and append it
       for (const msg of currentMessages) {
         if (msg.role === 'tool' && typeof msg.content === 'string') {
           try {
             const parsed = JSON.parse(msg.content);
             if (parsed.type === 'project_generation') {
               finalContent += '\n\n' + msg.content;
+            } else if (parsed.type === 'image_generation') {
+              finalContent += `\n\n![Generated Image](${parsed.imageUrl})`;
             }
           } catch { /* not JSON, skip */ }
         }
