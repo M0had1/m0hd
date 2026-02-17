@@ -537,9 +537,41 @@ Use remember_user_info when the user shares personal info (name, preferences, et
                 });
                 if (imgResponse.ok) {
                   const imgData = await imgResponse.json();
-                  const imageUrl = imgData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-                  if (imageUrl) {
-                    result = JSON.stringify({ type: 'image_generation', imageUrl, prompt: args.prompt });
+                  const base64Url = imgData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+                  if (base64Url && base64Url.startsWith('data:image')) {
+                    // Upload to storage to avoid base64 bloat in the response
+                    try {
+                      const base64Data = base64Url.split(',')[1];
+                      const mimeMatch = base64Url.match(/data:(image\/[^;]+);/);
+                      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+                      const ext = mimeType.split('/')[1] || 'png';
+                      const fileName = `generated/${crypto.randomUUID()}.${ext}`;
+                      
+                      const binaryStr = atob(base64Data);
+                      const bytes = new Uint8Array(binaryStr.length);
+                      for (let j = 0; j < binaryStr.length; j++) {
+                        bytes[j] = binaryStr.charCodeAt(j);
+                      }
+                      
+                      const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+                      const { error: uploadError } = await supabase.storage
+                        .from('moha')
+                        .upload(fileName, bytes, { contentType: mimeType, upsert: true });
+                      
+                      if (uploadError) {
+                        console.error('Upload error:', uploadError);
+                        // Fallback: return base64 directly
+                        result = JSON.stringify({ type: 'image_generation', imageUrl: base64Url, prompt: args.prompt });
+                      } else {
+                        const { data: publicUrlData } = supabase.storage.from('moha').getPublicUrl(fileName);
+                        result = JSON.stringify({ type: 'image_generation', imageUrl: publicUrlData.publicUrl, prompt: args.prompt });
+                      }
+                    } catch (uploadErr) {
+                      console.error('Upload exception:', uploadErr);
+                      result = JSON.stringify({ type: 'image_generation', imageUrl: base64Url, prompt: args.prompt });
+                    }
+                  } else if (base64Url) {
+                    result = JSON.stringify({ type: 'image_generation', imageUrl: base64Url, prompt: args.prompt });
                   } else {
                     result = 'Image generation did not return an image. Please try a different prompt.';
                   }
