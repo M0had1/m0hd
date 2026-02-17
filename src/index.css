@@ -369,3 +369,9 @@
 .focus-ring {
   @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
 }
+
+/* Disable animations toggle */
+.no-animations * {
+  animation-duration: 0s !important;
+  transition-duration: 0s !important;
+}
