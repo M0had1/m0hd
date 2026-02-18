@@ -154,7 +154,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
     }
   }, []);
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(() => {
     if (!recognitionRef.current) {
       onErrorRef.current?.('Speech recognition is not supported in your browser.');
       return;
@@ -164,18 +164,13 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
 
     setIsInitializing(true);
 
-    // First request microphone permission
-    const hasPermission = await requestMicrophonePermission();
-    if (!hasPermission) {
-      setIsInitializing(false);
-      return;
-    }
-
     try {
       // Stop any ongoing speech
       window.speechSynthesis?.cancel();
       setIsSpeaking(false);
       
+      // CRITICAL: Call recognition.start() directly in the user gesture handler
+      // Do NOT await getUserMedia first — it breaks the gesture chain in Safari
       recognitionRef.current.start();
       console.log('Started speech recognition');
     } catch (error) {
@@ -183,7 +178,7 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
       setIsInitializing(false);
       onErrorRef.current?.('Failed to start voice recognition. Please try again.');
     }
-  }, [isListening, requestMicrophonePermission]);
+  }, [isListening]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -271,14 +266,14 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
     onSpeakingChange?.(false);
   }, [onSpeakingChange]);
 
-  const toggleVoiceMode = useCallback(async () => {
+  const toggleVoiceMode = useCallback(() => {
     if (isVoiceMode) {
       stopListening();
       stopSpeaking();
       setIsVoiceMode(false);
     } else {
       setIsVoiceMode(true);
-      await startListening();
+      startListening();
     }
   }, [isVoiceMode, startListening, stopListening, stopSpeaking]);
 
