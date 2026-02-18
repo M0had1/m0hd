@@ -123,8 +123,7 @@ export const ChatHeader = ({
             <TooltipContent>Code Playground</TooltipContent>
           </Tooltip>
 
-          {/* Model selector */}
-          <ModelSelector />
+          {/* Model selector - hidden */}
 
           {/* Export Menu */}
           <ExportMenu conversation={conversation} />
