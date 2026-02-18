@@ -159,7 +159,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
         )}
 
         <div className={cn(
-          "relative flex items-end gap-2 rounded-2xl p-2.5 transition-all duration-200",
+          "relative flex items-end gap-1.5 sm:gap-2 rounded-2xl p-2 sm:p-2.5 transition-all duration-200",
           "bg-muted/60 border border-border/50",
           isFocused && "border-primary/30 shadow-premium bg-background"
         )}>
@@ -221,11 +221,11 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder="Message Mohamed's AI..."
+            placeholder="Message..."
             rows={1}
             className={cn(
               "flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground",
-              "focus:outline-none py-2 px-1 max-h-[200px] text-[0.9375rem]",
+              "focus:outline-none py-1.5 sm:py-2 px-1 max-h-[200px] text-sm sm:text-[0.9375rem]",
               "scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
             )}
             disabled={isLoading}
