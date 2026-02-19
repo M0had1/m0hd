@@ -171,10 +171,11 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
       
       // CRITICAL: Call recognition.start() directly in the user gesture handler
       // Do NOT await getUserMedia first — it breaks the gesture chain in Safari
+      console.log('[Voice] About to call recognition.start()');
       recognitionRef.current.start();
-      console.log('Started speech recognition');
+      console.log('[Voice] recognition.start() called successfully');
     } catch (error) {
-      console.error('Error starting speech recognition:', error);
+      console.error('[Voice] Error starting speech recognition:', error);
       setIsInitializing(false);
       onErrorRef.current?.('Failed to start voice recognition. Please try again.');
     }
@@ -267,6 +268,10 @@ export const useVoiceConversation = ({ onTranscript, onSpeakingChange, onError }
   }, [onSpeakingChange]);
 
   const toggleVoiceMode = useCallback(() => {
+    console.log('[Voice] toggleVoiceMode called, isVoiceMode:', isVoiceMode);
+    console.log('[Voice] recognitionRef:', !!recognitionRef.current);
+    console.log('[Voice] SpeechRecognition available:', !!(window.SpeechRecognition || window.webkitSpeechRecognition));
+    console.log('[Voice] speechSynthesis available:', !!window.speechSynthesis);
     if (isVoiceMode) {
       stopListening();
       stopSpeaking();
