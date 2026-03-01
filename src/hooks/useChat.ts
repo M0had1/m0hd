@@ -863,7 +863,7 @@ export const useChat = () => {
 
     setAbortController(null);
     setIsLoading(false);
-  }, [activeConversationId, createNewConversation, conversations, session, buildSystemPrompt, saveMessage, updateConversationTitle]);
+  }, [activeConversationId, createNewConversation, conversations, session, buildSystemPrompt, saveMessage, updateConversationTitle, selectedModel]);
 
   const stopGeneration = useCallback(() => {
     if (abortController) {
