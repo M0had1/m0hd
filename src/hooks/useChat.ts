@@ -81,28 +81,37 @@ const isImageGenerationRequest = (content: string): boolean => {
   return imageKeywords.some(keyword => lowerContent.includes(keyword));
 };
 
-// Check if prompt is requesting image editing
+// Check if prompt is requesting image editing — when an image is attached,
+// assume the user wants to edit it unless the prompt is purely analytical
 const isImageEditRequest = (content: string, hasImage: boolean): boolean => {
   if (!hasImage) return false;
   const lowerContent = content.toLowerCase();
-  const editKeywords = [
-    'edit',
-    'modify',
-    'change',
-    'transform',
-    'alter',
-    'update',
-    'adjust',
-    'fix',
-    'improve',
-    'enhance',
-    'add to',
-    'remove from',
-    'make it',
-    'turn it',
-    'convert',
+
+  // Analytical prompts that should NOT trigger editing
+  const analyzeKeywords = [
+    'what is this',
+    'what do you see',
+    'describe',
+    'analyze',
+    'explain',
+    'identify',
+    'read',
+    'translate',
+    'ocr',
+    'what does',
+    'tell me about',
+    'who is',
+    'what are',
+    'how many',
+    'is this',
+    'can you see',
+    'what text',
   ];
-  return editKeywords.some(keyword => lowerContent.includes(keyword));
+  const isAnalytical = analyzeKeywords.some(kw => lowerContent.includes(kw));
+  if (isAnalytical) return false;
+
+  // If image is attached and prompt is not analytical, treat as edit
+  return true;
 };
 
 // Check if prompt needs real-time web search
