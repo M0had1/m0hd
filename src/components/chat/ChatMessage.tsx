@@ -1,9 +1,11 @@
-import { User, Bot, Copy, Check, RefreshCw, FileText, AlertCircle, Sparkles, Download } from 'lucide-react';
+import { User, Copy, Check, RefreshCw, FileText, AlertCircle, Download } from 'lucide-react';
 import { useState } from 'react';
 import { Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useTypingEffect } from '@/hooks/useTypingEffect';
+import logoImg from '@/assets/logo.jpg';
 
 interface ChatMessageProps {
   message: Message;
@@ -111,13 +113,15 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
       });
   };
 
+  const { displayedText } = useTypingEffect(message.content, !!message.isStreaming, 5);
+
   const renderContent = () => {
     const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
     const parts = [];
     let lastIndex = 0;
     let match;
 
-    let displayContent = message.content;
+    let displayContent = isUser ? message.content : displayedText;
     const fileContentRegex = /\n\n--- Content of .+? ---\n[\s\S]*?\n--- End of .+? ---\n?/g;
     displayContent = displayContent.replace(fileContentRegex, '');
     displayContent = displayContent.replace(/\n\n\[Attached file: .+?\]/g, '');
@@ -213,24 +217,22 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
       )}
     >
       {/* Avatar */}
-      <div
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform group-hover:scale-105",
-          isUser
-            ? "bg-gradient-navy text-primary-foreground"
-            : message.isError
-            ? "bg-destructive/10 text-destructive"
-            : "bg-gradient-gold text-navy-dark"
-        )}
-      >
-        {isUser ? (
+      {isUser ? (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform group-hover:scale-105 bg-gradient-navy text-primary-foreground">
           <User className="h-4 w-4" />
-        ) : message.isError ? (
+        </div>
+      ) : message.isError ? (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform group-hover:scale-105 bg-destructive/10 text-destructive">
           <AlertCircle className="h-4 w-4" />
-        ) : (
-          <Sparkles className="h-4 w-4" />
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className={cn(
+          "h-9 w-9 shrink-0 rounded-xl shadow-sm overflow-hidden transition-transform group-hover:scale-105",
+          message.isStreaming && "animate-bounce"
+        )} style={message.isStreaming ? { animationDuration: '0.8s' } : undefined}>
+          <img src={logoImg} alt="AI" className="h-full w-full object-cover" />
+        </div>
+      )}
 
       {/* Content */}
       <div className={cn("flex-1 min-w-0 space-y-2", isUser && "text-right")}>
