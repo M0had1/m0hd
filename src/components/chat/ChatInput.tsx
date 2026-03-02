@@ -3,7 +3,6 @@ import { Send, Paperclip, Mic, Image, X, Square, Camera, Phone, Sparkles } from 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CameraCapture } from './CameraCapture';
-import { PromptLibrary } from './PromptLibrary';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatInputProps {
@@ -12,10 +11,9 @@ interface ChatInputProps {
   isLoading: boolean;
   onStartVoiceCall?: () => void;
   isVoiceSupported?: boolean;
-  onPromptSelect?: (prompt: string) => void;
 }
 
-export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoiceSupported, onPromptSelect }: ChatInputProps) => {
+export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoiceSupported }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -165,10 +163,6 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
         )}>
           {/* Attachment buttons */}
           <div className="flex items-center gap-0.5 pb-0.5">
-            <PromptLibrary onSelectPrompt={(prompt) => {
-              setMessage(prompt);
-              onPromptSelect?.(prompt);
-            }} />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
