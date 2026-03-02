@@ -1,8 +1,9 @@
-import { User, Bot, Copy, Check, RefreshCw, FileText, AlertCircle, Sparkles } from 'lucide-react';
+import { User, Bot, Copy, Check, RefreshCw, FileText, AlertCircle, Sparkles, Download } from 'lucide-react';
 import { useState } from 'react';
 import { Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ChatMessageProps {
   message: Message;
@@ -17,6 +18,24 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadImage = async (url: string, filename?: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename || `image-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      toast.success('Image downloaded');
+    } catch {
+      toast.error('Failed to download image');
+    }
   };
 
   const formatContent = (content: string) => {
@@ -38,13 +57,22 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
               parts.push(<span key={`t${i}-${lastIdx}`}>{line.slice(lastIdx, imgMatch.index)}</span>);
             }
             parts.push(
-              <img
-                key={`img${i}-${imgMatch.index}`}
-                src={imgMatch[2]}
-                alt={imgMatch[1] || 'Generated Image'}
-                className="max-w-full rounded-xl my-2 shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => window.open(imgMatch![2], '_blank')}
-              />
+              <div key={`img${i}-${imgMatch.index}`} className="relative group/img inline-block my-2">
+                <img
+                  src={imgMatch[2]}
+                  alt={imgMatch[1] || 'Generated Image'}
+                  className="max-w-full rounded-xl shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => window.open(imgMatch![2], '_blank')}
+                />
+                <Button
+                  variant="secondary"
+                  size="icon-sm"
+                  className="absolute bottom-2 right-2 h-8 w-8 rounded-lg opacity-0 group-hover/img:opacity-100 transition-opacity shadow-md bg-background/80 backdrop-blur-sm"
+                  onClick={(e) => { e.stopPropagation(); downloadImage(imgMatch![2], `generated-${Date.now()}.png`); }}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
             );
             lastIdx = imgMatch.index + imgMatch[0].length;
           }
