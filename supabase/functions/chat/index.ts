@@ -86,6 +86,20 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "web_search",
+      description: "Search the internet for real-time, up-to-date information. Use this whenever the user asks about current events, recent news, live data (weather, stock prices, sports scores), or any question that requires the latest information beyond your training data. Also use it when you are not confident about the accuracy of your answer.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query to look up on the internet" }
+        },
+        required: ["query"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "remember_user_info",
       description: "Remember important information about the user that should persist across conversations.",
       parameters: {
@@ -426,11 +440,18 @@ project-name/
 ## Memory Instructions
 Use remember_user_info when the user shares personal info (name, preferences, etc.).
 
+## Web Search
+- ALWAYS use the web_search tool when the user asks about current events, recent news, live data, real-time information, or anything that may have changed after your training data cutoff.
+- Also use web_search when you are unsure about the accuracy of facts, dates, statistics, or any claim.
+- You can make multiple searches to gather comprehensive information.
+- Cite your sources when using search results.
+
 ## General Capabilities:
 - Explain, debug, refactor code
 - Generate complete projects
 - Run JavaScript and Python code
 - Analyze documents and images
+- Search the internet for up-to-date information
 - Use markdown formatting`);
 
     const systemPrompt = baseSystemPrompt + userMemories;
@@ -583,6 +604,36 @@ Use remember_user_info when the user shares personal info (name, preferences, et
               } catch (imgErr) {
                 console.error('Image gen exception:', imgErr);
                 result = 'Image generation failed. Please try again.';
+              }
+            } else if (name === 'web_search') {
+              try {
+                const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(args.query)}&format=json&no_html=1&skip_disambig=1`;
+                const searchResp = await fetch(searchUrl, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' },
+                });
+                if (searchResp.ok) {
+                  const searchData = await searchResp.json();
+                  const parts: string[] = [];
+                  if (searchData.Abstract) parts.push(`Summary: ${searchData.Abstract} (Source: ${searchData.AbstractSource || 'N/A'})`);
+                  if (searchData.Answer) parts.push(`Answer: ${searchData.Answer}`);
+                  if (searchData.Definition) parts.push(`Definition: ${searchData.Definition}`);
+                  if (searchData.RelatedTopics?.length > 0) {
+                    for (const t of searchData.RelatedTopics.slice(0, 8)) {
+                      if (t.Text) parts.push(`- ${t.Text}`);
+                    }
+                  }
+                  if (searchData.Infobox?.content) {
+                    for (const f of searchData.Infobox.content.slice(0, 8)) {
+                      if (f.label && f.value) parts.push(`${f.label}: ${f.value}`);
+                    }
+                  }
+                  result = parts.length > 0 ? parts.join('\n') : 'No specific results found. Please answer based on your knowledge.';
+                } else {
+                  result = 'Search failed. Please answer based on your knowledge.';
+                }
+              } catch (searchErr) {
+                console.error('Web search error:', searchErr);
+                result = 'Search failed. Please answer based on your knowledge.';
               }
             } else if (name === 'remember_user_info') {
               const saved = await saveMemory(args.key, args.value, args.category || 'general');
