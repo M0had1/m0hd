@@ -64,16 +64,9 @@ export const ChatHeader = ({
             <div className="hidden sm:flex w-8 h-8 rounded-lg bg-gradient-gold items-center justify-center shadow-sm">
               <Sparkles className="h-4 w-4 text-navy-dark" />
             </div>
-            <div className="min-w-0">
-              <h1 className="font-medium text-foreground truncate max-w-[140px] sm:max-w-[280px] text-[0.9375rem]">
-                {title || "New Chat"}
-              </h1>
-              {title && (
-                <p className="text-xs text-muted-foreground hidden sm:block">
-                  Mohamed's AI
-                </p>
-              )}
-            </div>
+            <h1 className="font-medium text-foreground text-[0.9375rem]">
+              Mohamed's AI
+            </h1>
           </div>
         </div>
 
