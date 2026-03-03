@@ -60,14 +60,6 @@ export const ChatHeader = ({
             </TooltipContent>
           </Tooltip>
 
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="hidden sm:flex w-8 h-8 rounded-lg bg-gradient-gold items-center justify-center shadow-sm">
-              <Sparkles className="h-4 w-4 text-navy-dark" />
-            </div>
-            <h1 className="font-medium text-foreground text-[0.9375rem]">
-              Mohamed's AI
-            </h1>
-          </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
