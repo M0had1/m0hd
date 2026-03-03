@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -66,20 +66,20 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        gold: {
-          DEFAULT: "hsl(45, 93%, 47%)",
-          light: "hsl(45, 93%, 60%)",
-          dark: "hsl(45, 93%, 35%)",
+        copper: {
+          DEFAULT: "hsl(24, 80%, 50%)",
+          light: "hsl(24, 80%, 62%)",
+          dark: "hsl(24, 80%, 40%)",
         },
-        navy: {
-          DEFAULT: "hsl(222, 47%, 20%)",
-          light: "hsl(222, 47%, 30%)",
-          dark: "hsl(222, 47%, 11%)",
-          darker: "hsl(222, 47%, 8%)",
+        charcoal: {
+          DEFAULT: "hsl(20, 15%, 15%)",
+          light: "hsl(20, 12%, 22%)",
+          dark: "hsl(20, 12%, 8%)",
+          darker: "hsl(20, 12%, 5%)",
         },
-        emerald: {
-          DEFAULT: "hsl(160, 84%, 39%)",
-          light: "hsl(160, 84%, 50%)",
+        teal: {
+          DEFAULT: "hsl(170, 60%, 40%)",
+          light: "hsl(170, 55%, 55%)",
         },
       },
       borderRadius: {
