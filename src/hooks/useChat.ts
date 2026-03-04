@@ -344,9 +344,10 @@ export const useChat = () => {
 
   const deleteConversation = useCallback(async (conversationId: string) => {
     try {
+      // Soft delete: set deleted_at instead of hard delete
       const { error } = await supabase
         .from('conversations')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() } as any)
         .eq('id', conversationId);
 
       if (error) throw error;
@@ -369,9 +370,10 @@ export const useChat = () => {
     if (!session?.user?.id) return;
     
     try {
+      // Soft delete all conversations
       const { error } = await supabase
         .from('conversations')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() } as any)
         .eq('user_id', session.user.id);
 
       if (error) throw error;

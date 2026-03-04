@@ -15,6 +15,7 @@ import CodeIDE from "./pages/CodeIDE";
 import Install from "./pages/Install";
 import SharedConversation from "./pages/SharedConversation";
 import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <CodeIDE />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/admin" 
+                  element={
+                    <ProtectedRoute>
+                      <Admin />
                     </ProtectedRoute>
                   } 
                 />
