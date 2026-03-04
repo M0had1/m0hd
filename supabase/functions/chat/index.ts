@@ -470,6 +470,24 @@ Use remember_user_info when the user shares personal info (name, preferences, et
     };
 
     const makeRequest = async (msgs: any[], attempt = 1): Promise<Response> => {
+      // Detect if any message has image content for vision
+      const hasVision = msgs.some(m => 
+        Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
+      );
+
+      // Use a vision-capable model and add vision instructions
+      const effectiveModel = hasVision ? 'google/gemini-2.5-flash' : selectedModel;
+      const effectiveSystemPrompt = hasVision 
+        ? systemPrompt + `\n\n## Image Analysis Instructions:
+You have been given an image to analyze. Study it carefully and thoroughly.
+- If the image contains a question, math problem, equation, or any academic content, solve it step by step and provide the CORRECT answer immediately.
+- If it's a photo, describe what you see in detail.
+- If it contains text, read and transcribe it accurately.
+- If it's a diagram, chart, or graph, interpret and explain it.
+- If it's a code screenshot, read the code and explain or debug it.
+- Be precise, accurate, and give direct answers. Do NOT say you cannot see or analyze images.`
+        : systemPrompt;
+
       const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -477,11 +495,10 @@ Use remember_user_info when the user shares personal info (name, preferences, et
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: selectedModel,
-          messages: [{ role: 'system', content: systemPrompt }, ...msgs],
+          model: effectiveModel,
+          messages: [{ role: 'system', content: effectiveSystemPrompt }, ...msgs],
           stream: false,
-          tools,
-          tool_choice: "auto",
+          ...(hasVision ? {} : { tools, tool_choice: "auto" }),
         }),
       });
       if (response.status >= 500 && attempt < 3) {
