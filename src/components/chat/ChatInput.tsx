@@ -26,7 +26,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [message]);
 
@@ -155,7 +155,7 @@ export const ChatInput = ({ onSend, onStop, isLoading, onStartVoiceCall, isVoice
             onBlur={() => setIsFocused(false)}
             placeholder="Ask anything..."
             rows={1}
-            className="flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground/60 focus:outline-none py-1.5 sm:py-2 px-1 max-h-[200px] text-sm sm:text-[0.9375rem]"
+            className="flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground/60 focus:outline-none py-1.5 sm:py-2 px-1 max-h-[120px] text-sm sm:text-[0.9375rem]"
             disabled={isLoading}
           />
 
