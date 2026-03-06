@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import logoImage from '@/assets/logo.jpg';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ShaderGradientCanvas, ShaderGradient } from '@shadergradient/react';
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -132,52 +133,71 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden items-center justify-center"
-        style={{ background: 'var(--gradient-hero)' }}>
-        {/* Geometric accents */}
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.07]"
-          style={{ background: 'hsl(var(--primary))' , transform: 'translate(30%, -30%)' }} />
-        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full opacity-[0.05]"
-          style={{ background: 'hsl(var(--accent))' , transform: 'translate(-20%, 20%)' }} />
-        <div className="absolute top-1/4 left-1/4 w-px h-32 opacity-10"
-          style={{ background: 'hsl(var(--primary))' }} />
-        <div className="absolute bottom-1/3 right-1/3 w-24 h-px opacity-10"
-          style={{ background: 'hsl(var(--primary))' }} />
+      {/* Left panel - ShaderGradient */}
+      <div className="hidden lg:block lg:w-[45%] relative overflow-hidden">
+        <ShaderGradientCanvas
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          pointerEvents="none"
+        >
+          <ShaderGradient
+            animate="on"
+            brightness={1.2}
+            cAzimuthAngle={180}
+            cDistance={3.6}
+            cPolarAngle={90}
+            cameraZoom={1}
+            color1="#ff5005"
+            color2="#dbba95"
+            color3="#d0bce1"
+            envPreset="city"
+            grain="on"
+            lightType="3d"
+            positionX={-1.4}
+            positionY={0}
+            positionZ={0}
+            reflection={0.1}
+            rotationX={0}
+            rotationY={10}
+            rotationZ={50}
+            type="plane"
+            uAmplitude={1}
+            uDensity={1.3}
+            uFrequency={5.5}
+            uSpeed={0.1}
+            uStrength={4}
+            uTime={0}
+          />
+        </ShaderGradientCanvas>
 
-        <div className="relative z-10 px-12 max-w-md">
-          <div className="mb-8">
-            <img
-              src={logoImage}
-              alt="Mohamed's AI"
-              className="w-20 h-20 rounded-[22px] object-cover shadow-premium-lg"
-            />
-          </div>
-          <h1 className="text-[2.5rem] font-bold leading-[1.1] tracking-tight mb-4"
-            style={{ color: 'hsl(30, 15%, 92%)' }}>
-            Mohamed's
-            <br />
-            <span style={{ color: 'hsl(var(--primary))' }}>AI</span>
-          </h1>
-          <p className="text-base leading-relaxed opacity-60" style={{ color: 'hsl(30, 15%, 92%)' }}>
-            Your intelligent assistant for conversations, code, and creative work. Built with precision.
-          </p>
+        {/* Overlay content */}
+        <div className="relative z-10 flex items-center justify-center h-full">
+          <div className="px-12 max-w-md">
+            <div className="mb-8">
+              <img
+                src={logoImage}
+                alt="Mohamed's AI"
+                className="w-20 h-20 rounded-[22px] object-cover shadow-2xl"
+              />
+            </div>
+            <h1 className="text-[2.5rem] font-bold leading-[1.1] tracking-tight mb-4 text-white">
+              Mohamed's
+              <br />
+              <span className="text-white/80">AI</span>
+            </h1>
+            <p className="text-base leading-relaxed text-white/60">
+              Your intelligent assistant for conversations, code, and creative work. Built with precision.
+            </p>
 
-          {/* Subtle feature pills */}
-          <div className="flex flex-wrap gap-2 mt-8">
-            {['Chat', 'Code', 'Create', 'Analyze'].map((tag) => (
-              <span
-                key={tag}
-                className="px-3 py-1 rounded-full text-xs font-medium tracking-wide"
-                style={{
-                  background: 'hsl(var(--primary) / 0.1)',
-                  color: 'hsl(var(--primary))',
-                  border: '1px solid hsl(var(--primary) / 0.15)',
-                }}
-              >
-                {tag}
-              </span>
-            ))}
+            <div className="flex flex-wrap gap-2 mt-8">
+              {['Chat', 'Code', 'Create', 'Analyze'].map((tag) => (
+                <span
+                  key={tag}
+                  className="px-3 py-1 rounded-full text-xs font-medium tracking-wide bg-white/10 text-white/80 border border-white/15 backdrop-blur-sm"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
