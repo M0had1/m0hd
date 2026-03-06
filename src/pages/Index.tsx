@@ -155,7 +155,7 @@ const Index = () => {
           <WelcomeScreen onSendMessage={sendMessage} />
         ) : (
           <ScrollArea className="flex-1">
-            <div className="max-w-3xl mx-auto px-2 sm:px-4">
+            <div className="max-w-5xl xl:max-w-6xl mx-auto px-2 sm:px-4">
               {activeConversation.messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}
