@@ -183,8 +183,8 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
 
         <div className={cn(
           "text-foreground rounded-2xl",
-          !isUser && "bg-muted/30 px-4 py-3 mr-8 border border-border/30",
-          isUser && "inline-block text-left bg-primary/[0.07] px-4 py-3 rounded-2xl ml-8"
+          !isUser && "bg-muted/30 px-4 py-3 sm:mr-4 lg:mr-8 border border-border/30",
+          isUser && "inline-block text-left bg-primary/[0.07] px-4 py-3 rounded-2xl sm:ml-4 lg:ml-8"
         )}>
           {renderContent()}
         </div>

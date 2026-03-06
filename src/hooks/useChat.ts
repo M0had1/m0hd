@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Message, Conversation, Attachment } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -7,6 +7,8 @@ import { useAISettings } from '@/hooks/useAISettings';
 import { useModelSelection } from '@/hooks/useModelSelection';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+const MAX_CONTEXT_MESSAGES = 80;
+const MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024;
 
 // Convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -194,6 +196,7 @@ export const useChat = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const conversationsRef = useRef<Conversation[]>([]);
   const { buildSystemPrompt } = useAISettings();
   const { selectedModel } = useModelSelection();
 
@@ -278,6 +281,10 @@ export const useChat = () => {
 
     loadConversations();
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
@@ -429,143 +436,148 @@ export const useChat = () => {
   }, []);
 
   const sendMessage = useCallback(async (content: string, files?: File[], options?: { voiceMode?: boolean }): Promise<void> => {
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      toast({
+        title: 'Error',
+        description: 'You must be signed in to send messages',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     let conversationId = activeConversationId;
-    
     if (!conversationId) {
       conversationId = await createNewConversation();
       if (!conversationId) return;
     }
 
-    // Process attachments
-    const attachments: Attachment[] = [];
-    const imageContents: { type: 'image_url'; image_url: { url: string } }[] = [];
-    let textFileContents = '';
-    let hasImage = false;
-    let firstImageBase64 = '';
+    setIsLoading(true);
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const attachment: Attachment = {
-          id: generateId(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        };
+    let assistantMessageId: string | null = null;
 
-        if (isImageFile(file)) {
-          const base64 = await fileToBase64(file);
-          attachment.url = base64;
-          attachment.content = base64;
-          attachments.push(attachment);
-          hasImage = true;
-          if (!firstImageBase64) firstImageBase64 = base64;
-          
-          // Add to image contents for API
-          imageContents.push({
-            type: 'image_url',
-            image_url: { url: base64 }
-          });
-        } else if (isTextFile(file)) {
-          const textContent = await readTextFile(file);
-          attachment.content = textContent;
-          attachments.push(attachment);
-          
-          // Append text file content to the message
-          textFileContents += `\n\n--- Content of ${file.name} ---\n${textContent}\n--- End of ${file.name} ---\n`;
-        } else {
-          // For other files, try to read as text
+    try {
+      // Process attachments safely (never crash the chat on file parsing)
+      const attachments: Attachment[] = [];
+      const imageContents: { type: 'image_url'; image_url: { url: string } }[] = [];
+      let textFileContents = '';
+      let hasImage = false;
+      let firstImageBase64 = '';
+
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const attachment: Attachment = {
+            id: generateId(),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+          };
+
           try {
-            const textContent = await readTextFile(file);
-            attachment.content = textContent;
-            attachments.push(attachment);
-            textFileContents += `\n\n--- Content of ${file.name} ---\n${textContent}\n--- End of ${file.name} ---\n`;
-          } catch {
-            // If can't read, just add the file info
+            if (isImageFile(file)) {
+              if (file.size > MAX_IMAGE_SIZE_BYTES) {
+                toast({
+                  title: 'Image too large',
+                  description: `${file.name} is too large. Please use images below 8MB.`,
+                  variant: 'destructive',
+                });
+                continue;
+              }
+
+              const base64 = await fileToBase64(file);
+              attachment.url = base64;
+              attachment.content = base64;
+              attachments.push(attachment);
+              hasImage = true;
+
+              if (!firstImageBase64) firstImageBase64 = base64;
+              imageContents.push({ type: 'image_url', image_url: { url: base64 } });
+            } else if (isTextFile(file)) {
+              const textContent = await readTextFile(file);
+              attachment.content = textContent;
+              attachments.push(attachment);
+              textFileContents += `\n\n--- Content of ${file.name} ---\n${textContent}\n--- End of ${file.name} ---\n`;
+            } else {
+              try {
+                const textContent = await readTextFile(file);
+                attachment.content = textContent;
+                attachments.push(attachment);
+                textFileContents += `\n\n--- Content of ${file.name} ---\n${textContent}\n--- End of ${file.name} ---\n`;
+              } catch {
+                attachments.push(attachment);
+                textFileContents += `\n\n[Attached file: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)]`;
+              }
+            }
+          } catch (fileError) {
+            console.error('Attachment processing error:', fileError);
             attachments.push(attachment);
             textFileContents += `\n\n[Attached file: ${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)]`;
           }
         }
       }
-    }
 
-    const userMessage: Message = {
-      id: generateId(),
-      role: 'user',
-      content: content + textFileContents,
-      timestamp: new Date(),
-      attachments: attachments.length > 0 ? attachments : undefined,
-    };
+      const userMessage: Message = {
+        id: generateId(),
+        role: 'user',
+        content: content + textFileContents,
+        timestamp: new Date(),
+        attachments: attachments.length > 0 ? attachments : undefined,
+      };
 
-    // Get current messages for API call
-    const currentConversation = conversations.find(c => c.id === conversationId);
-    const previousMessages = currentConversation?.messages || [];
+      const currentConversation = conversationsRef.current.find(c => c.id === conversationId);
+      const previousMessages = currentConversation?.messages || [];
+      const contextMessages = previousMessages.slice(-MAX_CONTEXT_MESSAGES);
 
-    // Determine new title if this is the first message
-    const isFirstMessage = previousMessages.length === 0;
-    const newTitle = isFirstMessage ? content.slice(0, 30) + (content.length > 30 ? '...' : '') : null;
+      const isFirstMessage = previousMessages.length === 0;
+      const newTitle = isFirstMessage ? content.slice(0, 30) + (content.length > 30 ? '...' : '') : null;
 
-    // Add user message to state
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              messages: [...conv.messages, userMessage],
-              updatedAt: new Date(),
-              title: newTitle || conv.title,
-            }
-          : conv
-      )
-    );
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                messages: [...conv.messages, userMessage],
+                updatedAt: new Date(),
+                title: newTitle || conv.title,
+              }
+            : conv
+        )
+      );
 
-    // Save user message to database
-    await saveMessage(conversationId, userMessage);
+      await saveMessage(conversationId, userMessage);
 
-    // Update title in database if needed
-    if (newTitle) {
-      await updateConversationTitle(conversationId, newTitle);
-    }
-
-    setIsLoading(true);
-
-    // Create assistant message placeholder
-    const assistantMessageId = generateId();
-    const assistantMessage: Message = {
-      id: assistantMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      isStreaming: true,
-    };
-
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              messages: [...conv.messages, assistantMessage],
-              updatedAt: new Date(),
-            }
-          : conv
-      )
-    );
-
-    try {
-      const accessToken = session?.access_token;
-      if (!accessToken) {
-        throw new Error('You must be signed in to send messages');
+      if (newTitle) {
+        await updateConversationTitle(conversationId, newTitle);
       }
 
-      // Create abort controller for this request
+      const assistantMessage: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        isStreaming: true,
+      };
+      assistantMessageId = assistantMessage.id;
+
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                messages: [...conv.messages, assistantMessage],
+                updatedAt: new Date(),
+              }
+            : conv
+        )
+      );
+
       const controller = new AbortController();
       setAbortController(controller);
 
-      // Check if this is an image generation or editing request
       const isImageGen = isImageGenerationRequest(content);
       const isImageEdit = isImageEditRequest(content, hasImage);
 
       if (isImageGen || isImageEdit) {
-        // Handle image generation/editing
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`, {
           method: 'POST',
           headers: {
@@ -586,8 +598,6 @@ export const useChat = () => {
         }
 
         const data = await response.json();
-        
-        // Create response with image
         const imageMarkdown = `![Generated Image](${data.imageUrl})`;
         const fullContent = data.text ? `${data.text}\n\n${imageMarkdown}` : imageMarkdown;
 
@@ -606,222 +616,237 @@ export const useChat = () => {
           )
         );
 
-        // Save to database
         await saveMessage(conversationId, {
           ...assistantMessage,
           content: fullContent,
           isStreaming: false,
         });
-      } else {
-        // Regular chat - use streaming
-        // Prepare messages for API - handle multimodal content
-        const apiMessages = [
-          ...previousMessages.map(m => {
-            return { role: m.role, content: m.content };
-          }),
-        ];
 
-        // Build current message content
-        let fullTextContent = content + textFileContents;
-        
-        // Check if we need real-time web search
-        if (needsWebSearch(content)) {
-          try {
-            const searchResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`, {
+        return;
+      }
+
+      const apiMessages: Array<{ role: 'user' | 'assistant'; content: any }> = contextMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      let fullTextContent = content + textFileContents;
+
+      if (needsWebSearch(content)) {
+        try {
+          const searchResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ query: content }),
+            signal: controller.signal,
+          });
+
+          if (searchResponse.ok) {
+            const searchData = await searchResponse.json();
+            if (searchData.success && searchData.results) {
+              fullTextContent = `${content}\n\n[Real-time web search results for context - use this information to provide an up-to-date response]:\n${searchData.results}\n\n[End of search results]\n${textFileContents}`;
+            }
+          }
+        } catch (searchError) {
+          console.error('Web search failed:', searchError);
+        }
+      }
+
+      const codeBlocks = extractCodeBlocks(content);
+      if (needsCodeExecution(content) && codeBlocks.length > 0) {
+        try {
+          const codeResults: string[] = [];
+          for (const block of codeBlocks) {
+            const codeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-code`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ query: content }),
+              body: JSON.stringify({ code: block.code, language: block.language }),
               signal: controller.signal,
             });
 
-            if (searchResponse.ok) {
-              const searchData = await searchResponse.json();
-              if (searchData.success && searchData.results) {
-                fullTextContent = `${content}\n\n[Real-time web search results for context - use this information to provide an up-to-date response]:\n${searchData.results}\n\n[End of search results]\n${textFileContents}`;
-              }
-            }
-          } catch (searchError) {
-            console.error('Web search failed:', searchError);
-            // Continue without search results
-          }
-        }
-
-        // Check if we need code execution
-        const codeBlocks = extractCodeBlocks(content);
-        if (needsCodeExecution(content) && codeBlocks.length > 0) {
-          try {
-            const codeResults: string[] = [];
-            for (const block of codeBlocks) {
-              const codeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-code`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({ code: block.code, language: block.language }),
-                signal: controller.signal,
-              });
-
-              if (codeResponse.ok) {
-                const codeData = await codeResponse.json();
-                codeResults.push(`\n**Code Execution Result (${block.language}):**\n\`\`\`\n${codeData.output || codeData.error || 'No output'}\n\`\`\`\n(Executed in ${codeData.executionTime}ms)`);
-              }
-            }
-            if (codeResults.length > 0) {
-              fullTextContent += '\n\n[Code execution results for your reference]:' + codeResults.join('\n');
-            }
-          } catch (codeError) {
-            console.error('Code execution failed:', codeError);
-          }
-        }
-        
-        if (imageContents.length > 0) {
-          const messageContent: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [
-            { type: 'text', text: fullTextContent || 'Please analyze this image.' },
-            ...imageContents
-          ];
-          apiMessages.push({ role: 'user' as const, content: messageContent as any });
-        } else {
-          apiMessages.push({ role: 'user' as const, content: fullTextContent });
-        }
-
-        // Build custom system prompt from settings
-        let systemPrompt = await buildSystemPrompt();
-        
-        // Override with voice mode prompt for natural conversation
-        if (options?.voiceMode) {
-          systemPrompt = `You are having a casual, natural voice conversation with your friend. Keep your responses SHORT (1-3 sentences max), conversational, and warm — like talking on the phone. Don't use markdown, bullet points, code blocks, or any formatting. Don't say "Sure!" or "Of course!" too much. Just talk naturally like a real person would. Be friendly, witty, and engaging. If they ask something complex, give a brief answer and ask if they want more detail.`;
-        }
-
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ messages: apiMessages, systemPrompt, model: selectedModel }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          let errorMessage = 'Something went wrong. Please try again.';
-          try {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.error || errorMessage;
-          } catch {
-            if (errorText) errorMessage = errorText;
-          }
-          
-          // Handle specific error codes with user-friendly messages
-          if (response.status === 429) {
-            errorMessage = 'Too many requests. Please wait a moment and try again.';
-          } else if (response.status === 402) {
-            errorMessage = 'Usage limit reached. Please check your account.';
-          } else if (response.status === 503 || response.status >= 500) {
-            errorMessage = 'AI service is temporarily unavailable. Please try again in a few seconds.';
-          }
-          
-          throw new Error(errorMessage);
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let fullContent = '';
-        let buffer = '';
-
-        // Batch UI updates to avoid re-rendering on every token
-        let rafId: number | null = null;
-        let pendingContent = '';
-        const flushUiUpdate = () => {
-          rafId = null;
-          const next = pendingContent;
-          setConversations(prev => {
-            const convIdx = prev.findIndex(c => c.id === conversationId);
-            if (convIdx === -1) return prev;
-
-            const conv = prev[convIdx];
-            const nextMessages = conv.messages.map(msg =>
-              msg.id === assistantMessageId ? { ...msg, content: next } : msg
-            );
-
-            const nextConv = { ...conv, messages: nextMessages };
-            const copy = prev.slice();
-            copy[convIdx] = nextConv;
-            return copy;
-          });
-        };
-
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6).trim();
-                if (data === '[DONE]') continue;
-
-                try {
-                  const parsed = JSON.parse(data);
-                  const delta = parsed.choices?.[0]?.delta?.content;
-                  if (delta) {
-                    fullContent += delta;
-                    pendingContent = fullContent;
-
-                    if (rafId === null) {
-                      rafId = requestAnimationFrame(flushUiUpdate);
-                    }
-                  }
-                } catch (e) {
-                  console.warn('Failed to parse streaming data:', data);
-                }
-              }
+            if (codeResponse.ok) {
+              const codeData = await codeResponse.json();
+              codeResults.push(`\n**Code Execution Result (${block.language}):**\n\`\`\`\n${codeData.output || codeData.error || 'No output'}\n\`\`\`\n(Executed in ${codeData.executionTime}ms)`);
             }
           }
+
+          if (codeResults.length > 0) {
+            fullTextContent += '\n\n[Code execution results for your reference]:' + codeResults.join('\n');
+          }
+        } catch (codeError) {
+          console.error('Code execution failed:', codeError);
         }
-
-        // Flush any remaining buffered UI update
-        if (rafId !== null) {
-          cancelAnimationFrame(rafId);
-        }
-        pendingContent = fullContent;
-        flushUiUpdate();
-
-        // Mark streaming as complete
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === conversationId
-              ? {
-                  ...conv,
-                  messages: conv.messages.map(msg =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, isStreaming: false }
-                      : msg
-                  ),
-                }
-              : conv
-          )
-        );
-
-        // Save assistant message to database
-        await saveMessage(conversationId, {
-          ...assistantMessage,
-          content: fullContent,
-          isStreaming: false,
-        });
       }
+
+      if (imageContents.length > 0) {
+        const messageContent: ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] = [
+          { type: 'text', text: fullTextContent || 'Please analyze this image.' },
+          ...imageContents,
+        ];
+        apiMessages.push({ role: 'user', content: messageContent });
+      } else {
+        apiMessages.push({ role: 'user', content: fullTextContent });
+      }
+
+      let systemPrompt = await buildSystemPrompt();
+      if (options?.voiceMode) {
+        systemPrompt = `You are having a casual, natural voice conversation with your friend. Keep your responses SHORT (1-3 sentences max), conversational, and warm — like talking on the phone. Don't use markdown, bullet points, code blocks, or any formatting. Don't say "Sure!" or "Of course!" too much. Just talk naturally like a real person would. Be friendly, witty, and engaging. If they ask something complex, give a brief answer and ask if they want more detail.`;
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ messages: apiMessages, systemPrompt, model: selectedModel }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Something went wrong. Please try again.';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          if (errorText) errorMessage = errorText;
+        }
+
+        if (response.status === 429) {
+          errorMessage = 'Too many requests. Please wait a moment and try again.';
+        } else if (response.status === 402) {
+          errorMessage = 'Usage limit reached. Please check your account.';
+        } else if (response.status === 503 || response.status >= 500) {
+          errorMessage = 'AI service is temporarily unavailable. Please try again in a few seconds.';
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body received from AI service.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let textBuffer = '';
+
+      let rafId: number | null = null;
+      let pendingContent = '';
+      const flushUiUpdate = () => {
+        rafId = null;
+        const next = pendingContent;
+        setConversations(prev => {
+          const convIdx = prev.findIndex(c => c.id === conversationId);
+          if (convIdx === -1) return prev;
+
+          const conv = prev[convIdx];
+          const nextMessages = conv.messages.map(msg =>
+            msg.id === assistantMessageId ? { ...msg, content: next } : msg
+          );
+
+          const nextConv = { ...conv, messages: nextMessages };
+          const copy = prev.slice();
+          copy[convIdx] = nextConv;
+          return copy;
+        });
+      };
+
+      let streamDone = false;
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') {
+            streamDone = true;
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (delta) {
+              fullContent += delta;
+              pendingContent = fullContent;
+              if (rafId === null) rafId = requestAnimationFrame(flushUiUpdate);
+            }
+          } catch {
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Final flush for any remaining buffered lines
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (raw.startsWith(':') || raw.trim() === '') continue;
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (delta) fullContent += delta;
+          } catch {
+            // ignore leftover partial fragment
+          }
+        }
+      }
+
+      if (!fullContent.trim()) {
+        fullContent = 'I could not generate a response this time. Please retry your message.';
+      }
+
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      pendingContent = fullContent;
+      flushUiUpdate();
+
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                messages: conv.messages.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isStreaming: false }
+                    : msg
+                ),
+              }
+            : conv
+        )
+      );
+
+      await saveMessage(conversationId, {
+        ...assistantMessage,
+        content: fullContent,
+        isStreaming: false,
+      });
     } catch (error) {
-      // Check if it was an abort
       if (error instanceof Error && error.name === 'AbortError') {
-        // Mark streaming as complete but keep current content
         setConversations(prev =>
           prev.map(conv =>
             conv.id === conversationId
@@ -839,37 +864,36 @@ export const useChat = () => {
       } else {
         console.error('Chat error:', error);
         const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
-        
+
         toast({
           title: 'Error',
           description: errorMsg,
           variant: 'destructive',
         });
-        
-        // Update message with error state - show user-friendly message
-        const errorContent = `⚠️ ${errorMsg}\n\nPlease try sending your message again.`;
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === conversationId
-              ? {
-                  ...conv,
-                  messages: conv.messages.map(msg =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, content: errorContent, isStreaming: false, isError: true }
-                      : msg
-                  ),
-                }
-              : conv
-          )
-        );
 
-        // Don't save error messages to database - allow retry
+        if (assistantMessageId) {
+          const errorContent = `⚠️ ${errorMsg}\n\nPlease try sending your message again.`;
+          setConversations(prev =>
+            prev.map(conv =>
+              conv.id === conversationId
+                ? {
+                    ...conv,
+                    messages: conv.messages.map(msg =>
+                      msg.id === assistantMessageId
+                        ? { ...msg, content: errorContent, isStreaming: false, isError: true }
+                        : msg
+                    ),
+                  }
+                : conv
+            )
+          );
+        }
       }
+    } finally {
+      setAbortController(null);
+      setIsLoading(false);
     }
-
-    setAbortController(null);
-    setIsLoading(false);
-  }, [activeConversationId, createNewConversation, conversations, session, buildSystemPrompt, saveMessage, updateConversationTitle, selectedModel]);
+  }, [activeConversationId, buildSystemPrompt, createNewConversation, saveMessage, selectedModel, session, updateConversationTitle]);
 
   const stopGeneration = useCallback(() => {
     if (abortController) {
