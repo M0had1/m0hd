@@ -453,15 +453,18 @@ project-name/
 ## Memory Instructions
 Use remember_user_info when the user shares personal info (name, preferences, etc.).
 
-## Web Search — CRITICAL INSTRUCTIONS
-- You have LIVE internet access through the web_search tool. USE IT AGGRESSIVELY.
-- ALWAYS search for: current events, news, sports, weather, stock prices, people's ages/status, recent releases, any 2024/2025/2026 events, deaths, elections, technology updates, company news, product launches, pop culture trends.
-- SEARCH FIRST, answer second. Do NOT guess or use potentially outdated training data when a quick search would give accurate information.
-- Make MULTIPLE searches if needed to get comprehensive, accurate information.
+## Web Search — MANDATORY INSTRUCTIONS
+- You have LIVE internet access through the web_search tool. USE IT FOR ALMOST EVERY QUESTION.
+- YOUR TRAINING DATA IS OUTDATED. You do NOT reliably know anything that happened after early 2024. For ANY topic that could have changed since then, YOU MUST SEARCH.
+- ALWAYS search for: current events, news, sports scores, weather, stock prices, people's ages/status, recent releases, ANY 2024/2025/2026 events, deaths, elections, wars, conflicts, technology updates, company news, product launches, pop culture, movies, TV shows, music releases, game releases, scientific discoveries, political events, natural disasters, celebrity news, AI developments, crypto prices, new laws/regulations.
+- SEARCH FIRST, answer second. NEVER guess about facts from 2024, 2025, or 2026. A wrong answer is worse than saying "let me search for that."
+- Make MULTIPLE searches with different queries if the first search doesn't give good results. Try rephrasing, adding the year, or being more specific.
 - Always cite your sources with links when available.
-- If search returns no results, clearly state that you couldn't verify the information online.
-- For questions about "today", "this week", "latest", "current", "recent" — ALWAYS search.
-- The current date is ${new Date().toISOString().split('T')[0]}. Use this in your search queries for time-sensitive topics.
+- If search returns no results, clearly state that you couldn't verify the information online and that your knowledge may be outdated.
+- For questions about "today", "this week", "latest", "current", "recent", "new", "now" — ALWAYS search.
+- For ANY factual question (who is the president, who won a game, what is the latest version, etc.) — ALWAYS search.
+- The current date is ${new Date().toISOString().split('T')[0]}. ALWAYS include the year 2026 or "March 2026" in your search queries for time-sensitive topics.
+- If someone asks about something and you're not 100% certain it hasn't changed since 2024, SEARCH.
 
 ## General Capabilities:
 - Explain, debug, refactor code
@@ -669,6 +672,20 @@ You have been given an image to analyze. Study it carefully and thoroughly.
                   }
                 }
 
+              // Wikipedia API for factual/encyclopedic queries
+                try {
+                  const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(args.query.replace(/ /g, '_'))}`;
+                  const wikiResp = await fetch(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
+                  if (wikiResp.ok) {
+                    const wikiData = await wikiResp.json();
+                    if (wikiData.extract && wikiData.extract.length > 50) {
+                      searchParts.push(`\nWikipedia: ${wikiData.extract} (${wikiData.content_urls?.desktop?.page || ''})`);
+                    }
+                  }
+                } catch (wikiErr) {
+                  console.error('Wikipedia error:', wikiErr);
+                }
+
                 // DuckDuckGo Lite HTML for actual web results
                 try {
                   const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(args.query)}`;
@@ -682,12 +699,12 @@ You have been given an image to analyze. Study it carefully and thoroughly.
                     let m;
                     const webResults: string[] = [];
                     const webLinks: { url: string; title: string }[] = [];
-                    while ((m = linkRegex.exec(html)) !== null && webLinks.length < 8) {
+                    while ((m = linkRegex.exec(html)) !== null && webLinks.length < 10) {
                       const url = m[1].replace(/&amp;/g, '&');
                       const title = m[2].replace(/<[^>]*>/g, '').trim();
                       if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
                     }
-                    while ((m = snippetRegex.exec(html)) !== null && webResults.length < 8) {
+                    while ((m = snippetRegex.exec(html)) !== null && webResults.length < 10) {
                       const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
                       if (snippet) webResults.push(snippet);
                     }
