@@ -124,6 +124,14 @@ serve(async (req) => {
   }
 
   try {
+    // Enforce authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ success: false, error: 'Authentication required' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { content, fileName, fileType, fileSize, analysisType = 'full' } = await req.json();
 
     if (!content || typeof content !== 'string') {
