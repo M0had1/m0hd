@@ -27,69 +27,48 @@ export default function SharedConversation() {
   }, [token]);
 
   const fetchSharedConversation = async () => {
-    if (!token || token.length > 64) {
+    if (!token || token.length > 64 || !/^[a-f0-9]+$/.test(token)) {
       setError('Invalid share link.');
       setLoading(false);
       return;
     }
 
     try {
-      // Get shared conversation details (anon policy allows this)
-      const { data: shareData, error: shareError } = await supabase
-        .from('shared_conversations')
-        .select('conversation_id, expires_at')
-        .eq('share_token', token)
-        .single();
+      // Use the secure RPC function that validates the token server-side
+      const { data: rows, error: rpcError } = await supabase
+        .rpc('get_shared_conversation', { _token: token });
 
-      if (shareError || !shareData) {
-        setError('This shared conversation was not found or has been removed.');
-        setLoading(false);
-        return;
-      }
-
-      // Check expiry
-      if (shareData.expires_at && new Date(shareData.expires_at) < new Date()) {
-        setError('This shared link has expired.');
-        setLoading(false);
-        return;
-      }
-
-      // Fetch conversation (anon policy allows shared conversations)
-      const { data: conversation, error: convError } = await supabase
-        .from('conversations')
-        .select('id, title, created_at')
-        .eq('id', shareData.conversation_id)
-        .single();
-
-      if (convError || !conversation) {
+      if (rpcError) {
+        console.error('RPC error:', rpcError);
         setError('Failed to load the shared conversation.');
         setLoading(false);
         return;
       }
 
-      // Fetch messages (anon policy allows messages in shared conversations)
-      const { data: messages, error: msgError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', shareData.conversation_id)
-        .order('created_at', { ascending: true });
-
-      if (msgError) {
-        setError('Failed to load messages.');
+      if (!rows || rows.length === 0) {
+        setError('This shared conversation was not found, has expired, or has been removed.');
         setLoading(false);
         return;
       }
 
-      setData({
-        conversation,
-        messages: (messages || []).map((m) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          timestamp: new Date(m.created_at),
-          attachments: m.attachments as unknown as Message['attachments'],
-        })),
-      });
+      const firstRow = rows[0];
+      const conversation = {
+        id: firstRow.conversation_id,
+        title: firstRow.conversation_title,
+        created_at: firstRow.conversation_created_at,
+      };
+
+      const messages: Message[] = rows
+        .filter((r: any) => r.message_id != null)
+        .map((r: any) => ({
+          id: r.message_id,
+          role: r.message_role as 'user' | 'assistant',
+          content: r.message_content,
+          timestamp: new Date(r.message_created_at),
+          attachments: r.message_attachments as unknown as Message['attachments'],
+        }));
+
+      setData({ conversation, messages });
     } catch (err) {
       console.error('Error fetching shared conversation:', err);
       setError('Failed to load the shared conversation.');

@@ -13,6 +13,14 @@ serve(async (req) => {
   }
 
   try {
+    // Enforce authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { prompt, imageUrl, mode } = await req.json();
 
     if (!prompt || typeof prompt !== 'string') {

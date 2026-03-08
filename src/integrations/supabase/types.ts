@@ -230,6 +230,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_shared_conversation: {
+        Args: { _token: string }
+        Returns: {
+          conversation_created_at: string
+          conversation_id: string
+          conversation_title: string
+          message_attachments: Json
+          message_content: string
+          message_created_at: string
+          message_id: string
+          message_role: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
