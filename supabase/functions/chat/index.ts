@@ -87,11 +87,11 @@ const tools = [
     type: "function",
     function: {
       name: "web_search",
-      description: "Search the internet for real-time, up-to-date information. Use this whenever the user asks about current events, recent news, live data (weather, stock prices, sports scores), or any question that requires the latest information beyond your training data. Also use it when you are not confident about the accuracy of your answer.",
+      description: "Search the internet for real-time, up-to-date information. You MUST use this tool proactively and frequently — do NOT rely on training data for any of the following: current events, news, dates, people's ages, sports scores, weather, stock prices, recent releases, deaths, elections, wars, technology updates, company news, product launches, pop culture, or ANY factual claim you're not 100% certain about. When in doubt, SEARCH. You can call this tool multiple times with different queries to gather comprehensive information. Always prefer searching over guessing.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "The search query to look up on the internet" }
+          query: { type: "string", description: "The search query. Be specific and include the current year (2026) for time-sensitive queries." }
         },
         required: ["query"]
       }
