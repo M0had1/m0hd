@@ -238,17 +238,37 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b border-border">
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Settings className="h-5 w-5" />
+      <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col p-0 w-[95vw] sm:w-full">
+        <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
             Settings
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-48 border-r border-border p-2 space-y-1 bg-muted/30">
+        {/* Mobile: horizontal scrollable tabs */}
+        <div className="sm:hidden border-b border-border px-2 py-1.5 shrink-0 overflow-x-auto">
+          <div className="flex gap-1 min-w-max">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <tab.icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          {/* Desktop sidebar */}
+          <div className="hidden sm:block w-48 border-r border-border p-2 space-y-1 bg-muted/30 shrink-0">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -266,7 +286,7 @@ export const SettingsDialog = ({ open, onOpenChange }: SettingsDialogProps) => {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             {/* AI Behavior Tab */}
             {activeTab === 'ai' && (
               <div className="space-y-6">
