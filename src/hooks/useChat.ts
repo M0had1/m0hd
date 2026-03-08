@@ -325,6 +325,10 @@ export const useChat = () => {
 
   useEffect(() => {
     conversationsRef.current = conversations;
+    // Keep offline cache in sync with latest state
+    if (conversations.length > 0) {
+      cacheConversations(conversations).catch(() => {});
+    }
   }, [conversations]);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
