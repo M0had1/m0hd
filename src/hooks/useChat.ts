@@ -216,11 +216,29 @@ export const useChat = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load conversations from database
+  // Load conversations from database (or offline cache)
   useEffect(() => {
     const loadConversations = async () => {
       if (!session?.user?.id) {
         setConversations([]);
+        setIsInitialized(true);
+        return;
+      }
+
+      // If offline, load from IndexedDB cache
+      if (isOffline()) {
+        try {
+          const cached = await loadCachedConversations();
+          if (cached.length > 0) {
+            setConversations(cached);
+            toast({
+              title: 'Offline mode',
+              description: 'Showing cached conversations. Some features are unavailable offline.',
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to load offline cache:', err);
+        }
         setIsInitialized(true);
         return;
       }
@@ -268,13 +286,35 @@ export const useChat = () => {
         });
 
         setConversations(conversationsWithMessages);
+
+        // Cache to IndexedDB for offline access
+        cacheConversations(conversationsWithMessages).catch(() => {});
       } catch (error) {
         console.error('Error loading conversations:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load conversations',
-          variant: 'destructive',
-        });
+
+        // Fallback to offline cache on network failure
+        try {
+          const cached = await loadCachedConversations();
+          if (cached.length > 0) {
+            setConversations(cached);
+            toast({
+              title: 'Connection issue',
+              description: 'Showing cached conversations.',
+            });
+          } else {
+            toast({
+              title: 'Error',
+              description: 'Failed to load conversations',
+              variant: 'destructive',
+            });
+          }
+        } catch {
+          toast({
+            title: 'Error',
+            description: 'Failed to load conversations',
+            variant: 'destructive',
+          });
+        }
       } finally {
         setIsInitialized(true);
       }
