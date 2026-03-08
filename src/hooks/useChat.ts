@@ -5,6 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { Session } from '@supabase/supabase-js';
 import { useAISettings } from '@/hooks/useAISettings';
 import { useModelSelection } from '@/hooks/useModelSelection';
+import { cacheConversations, loadCachedConversations, isOffline } from '@/lib/offlineCache';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const MAX_CONTEXT_MESSAGES = 80;
