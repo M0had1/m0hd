@@ -6,6 +6,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { VoiceCallOverlay } from '@/components/chat/VoiceCallOverlay';
+import { OfflineBanner } from '@/components/chat/OfflineBanner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useChat } from '@/hooks/useChat';
