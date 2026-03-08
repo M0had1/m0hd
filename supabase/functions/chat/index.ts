@@ -641,33 +641,73 @@ You have been given an image to analyze. Study it carefully and thoroughly.
               }
             } else if (name === 'web_search') {
               try {
-                const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(args.query)}&format=json&no_html=1&skip_disambig=1`;
-                const searchResp = await fetch(searchUrl, {
-                  headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' },
-                });
-                if (searchResp.ok) {
-                  const searchData = await searchResp.json();
-                  const parts: string[] = [];
-                  if (searchData.Abstract) parts.push(`Summary: ${searchData.Abstract} (Source: ${searchData.AbstractSource || 'N/A'})`);
-                  if (searchData.Answer) parts.push(`Answer: ${searchData.Answer}`);
-                  if (searchData.Definition) parts.push(`Definition: ${searchData.Definition}`);
-                  if (searchData.RelatedTopics?.length > 0) {
-                    for (const t of searchData.RelatedTopics.slice(0, 8)) {
-                      if (t.Text) parts.push(`- ${t.Text}`);
+                // Use DuckDuckGo instant answer + lite HTML for comprehensive results
+                const searchParts: string[] = [];
+                
+                // DuckDuckGo Instant Answer
+                const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(args.query)}&format=json&no_html=1&skip_disambig=1`;
+                const ddgResp = await fetch(ddgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
+                if (ddgResp.ok) {
+                  const ddgData = await ddgResp.json();
+                  if (ddgData.Abstract) searchParts.push(`Summary: ${ddgData.Abstract} (Source: ${ddgData.AbstractSource || 'N/A'})`);
+                  if (ddgData.Answer) searchParts.push(`Direct Answer: ${ddgData.Answer}`);
+                  if (ddgData.Definition) searchParts.push(`Definition: ${ddgData.Definition}`);
+                  if (ddgData.Infobox?.content) {
+                    for (const f of ddgData.Infobox.content.slice(0, 10)) {
+                      if (f.label && f.value) searchParts.push(`${f.label}: ${f.value}`);
                     }
                   }
-                  if (searchData.Infobox?.content) {
-                    for (const f of searchData.Infobox.content.slice(0, 8)) {
-                      if (f.label && f.value) parts.push(`${f.label}: ${f.value}`);
+                  if (ddgData.RelatedTopics?.length > 0) {
+                    for (const t of ddgData.RelatedTopics.slice(0, 10)) {
+                      if (t.Text) searchParts.push(`- ${t.Text}${t.FirstURL ? ' (' + t.FirstURL + ')' : ''}`);
+                      else if (t.Topics) {
+                        for (const sub of t.Topics.slice(0, 3)) {
+                          if (sub.Text) searchParts.push(`- ${sub.Text}${sub.FirstURL ? ' (' + sub.FirstURL + ')' : ''}`);
+                        }
+                      }
                     }
                   }
-                  result = parts.length > 0 ? parts.join('\n') : 'No specific results found. Please answer based on your knowledge.';
-                } else {
-                  result = 'Search failed. Please answer based on your knowledge.';
                 }
+
+                // DuckDuckGo Lite HTML for actual web results
+                try {
+                  const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(args.query)}`;
+                  const liteResp = await fetch(liteUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                  });
+                  if (liteResp.ok) {
+                    const html = await liteResp.text();
+                    const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
+                    const linkRegex = /<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+                    let m;
+                    const webResults: string[] = [];
+                    const webLinks: { url: string; title: string }[] = [];
+                    while ((m = linkRegex.exec(html)) !== null && webLinks.length < 8) {
+                      const url = m[1].replace(/&amp;/g, '&');
+                      const title = m[2].replace(/<[^>]*>/g, '').trim();
+                      if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
+                    }
+                    while ((m = snippetRegex.exec(html)) !== null && webResults.length < 8) {
+                      const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+                      if (snippet) webResults.push(snippet);
+                    }
+                    for (let i = 0; i < Math.max(webLinks.length, webResults.length); i++) {
+                      const link = webLinks[i];
+                      const snippet = webResults[i];
+                      if (link) searchParts.push(`\n${i + 1}. ${link.title} (${link.url})`);
+                      if (snippet) searchParts.push(`   ${snippet}`);
+                    }
+                  }
+                } catch (liteErr) {
+                  console.error('Lite search error:', liteErr);
+                }
+
+                result = searchParts.length > 0 
+                  ? `Web search results for "${args.query}" (searched on ${new Date().toISOString()}):\n\n${searchParts.join('\n')}`
+                  : `No specific results found for "${args.query}". Answer based on your knowledge but clearly state you could not verify this online.`;
               } catch (searchErr) {
                 console.error('Web search error:', searchErr);
-                result = 'Search failed. Please answer based on your knowledge.';
+                result = 'Search failed. Answer based on your knowledge but note that you could not verify online.';
               }
             } else if (name === 'remember_user_info') {
               const saved = await saveMemory(args.key, args.value, args.category || 'general');
