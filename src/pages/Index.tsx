@@ -6,6 +6,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { VoiceCallOverlay } from '@/components/chat/VoiceCallOverlay';
+import { OfflineBanner } from '@/components/chat/OfflineBanner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useChat } from '@/hooks/useChat';
@@ -141,6 +142,7 @@ const Index = () => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
+        <OfflineBanner />
         <ChatHeader
           title={activeConversation?.title || ''}
           onToggleSidebar={toggleSidebar}
