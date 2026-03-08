@@ -672,6 +672,20 @@ You have been given an image to analyze. Study it carefully and thoroughly.
                   }
                 }
 
+              // Wikipedia API for factual/encyclopedic queries
+                try {
+                  const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(args.query.replace(/ /g, '_'))}`;
+                  const wikiResp = await fetch(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
+                  if (wikiResp.ok) {
+                    const wikiData = await wikiResp.json();
+                    if (wikiData.extract && wikiData.extract.length > 50) {
+                      searchParts.push(`\nWikipedia: ${wikiData.extract} (${wikiData.content_urls?.desktop?.page || ''})`);
+                    }
+                  }
+                } catch (wikiErr) {
+                  console.error('Wikipedia error:', wikiErr);
+                }
+
                 // DuckDuckGo Lite HTML for actual web results
                 try {
                   const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(args.query)}`;
@@ -685,12 +699,12 @@ You have been given an image to analyze. Study it carefully and thoroughly.
                     let m;
                     const webResults: string[] = [];
                     const webLinks: { url: string; title: string }[] = [];
-                    while ((m = linkRegex.exec(html)) !== null && webLinks.length < 8) {
+                    while ((m = linkRegex.exec(html)) !== null && webLinks.length < 10) {
                       const url = m[1].replace(/&amp;/g, '&');
                       const title = m[2].replace(/<[^>]*>/g, '').trim();
                       if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
                     }
-                    while ((m = snippetRegex.exec(html)) !== null && webResults.length < 8) {
+                    while ((m = snippetRegex.exec(html)) !== null && webResults.length < 10) {
                       const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
                       if (snippet) webResults.push(snippet);
                     }
