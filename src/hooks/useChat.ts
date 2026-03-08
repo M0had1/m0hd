@@ -121,40 +121,8 @@ const isImageEditRequest = (content: string, hasImage: boolean): boolean => {
   return editKeywords.some(kw => lowerContent.includes(kw));
 };
 
-// Check if prompt needs real-time web search
-const needsWebSearch = (content: string): boolean => {
-  const lowerContent = content.toLowerCase();
-  const searchKeywords = [
-    'search for',
-    'search the web',
-    'look up',
-    'find information',
-    'what is the latest',
-    'current news',
-    'recent news',
-    'today',
-    'yesterday',
-    'this week',
-    'this month',
-    '2024',
-    '2025',
-    'right now',
-    'latest',
-    'recent',
-    'current',
-    'update on',
-    'news about',
-    'what happened',
-    'who won',
-    'stock price',
-    'weather',
-    'score',
-    'results',
-    'breaking',
-    'trending',
-  ];
-  return searchKeywords.some(keyword => lowerContent.includes(keyword));
-};
+// Web search is now handled server-side by the AI model via tool calling.
+// The AI autonomously decides when to search the internet.
 
 // Check if prompt needs code execution
 const needsCodeExecution = (content: string): boolean => {
@@ -676,29 +644,6 @@ export const useChat = () => {
       }));
 
       let fullTextContent = content + textFileContents;
-
-      if (needsWebSearch(content)) {
-        try {
-          const searchResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ query: content }),
-            signal: controller.signal,
-          });
-
-          if (searchResponse.ok) {
-            const searchData = await searchResponse.json();
-            if (searchData.success && searchData.results) {
-              fullTextContent = `${content}\n\n[Real-time web search results for context - use this information to provide an up-to-date response]:\n${searchData.results}\n\n[End of search results]\n${textFileContents}`;
-            }
-          }
-        } catch (searchError) {
-          console.error('Web search failed:', searchError);
-        }
-      }
 
       const codeBlocks = extractCodeBlocks(content);
       if (needsCodeExecution(content) && codeBlocks.length > 0) {
