@@ -489,15 +489,14 @@ Use remember_user_info when the user shares personal info (name, preferences, et
       return true;
     };
 
+    const NVIDIA_API_KEY = Deno.env.get('api');
+
     const makeRequest = async (msgs: any[], attempt = 1): Promise<Response> => {
-      // Detect if any message has image content for vision
-      const hasVision = msgs.some(m => 
+      const hasVision = msgs.some(m =>
         Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
       );
 
-      // Use a vision-capable model and add vision instructions
-      const effectiveModel = hasVision ? 'google/gemini-2.5-flash' : selectedModel;
-      const effectiveSystemPrompt = hasVision 
+      const effectiveSystemPrompt = hasVision
         ? systemPrompt + `\n\n## Image Analysis Instructions:
 You have been given an image to analyze. Study it carefully and thoroughly.
 - If the image contains a question, math problem, equation, or any academic content, solve it step by step and provide the CORRECT answer immediately.
@@ -508,6 +507,45 @@ You have been given an image to analyze. Study it carefully and thoroughly.
 - Be precise, accurate, and give direct answers. Do NOT say you cannot see or analyze images.`
         : systemPrompt;
 
+      // Primary: NVIDIA NIM (mapped to NVIDIA-hosted models)
+      const nvidiaModel = hasVision
+        ? 'meta/llama-3.2-90b-vision-instruct'
+        : 'meta/llama-3.3-70b-instruct';
+
+      if (NVIDIA_API_KEY) {
+        try {
+          const nvResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: nvidiaModel,
+              messages: [{ role: 'system', content: effectiveSystemPrompt }, ...msgs],
+              stream: false,
+              max_tokens: 4096,
+              temperature: 0.7,
+              ...(hasVision ? {} : { tools, tool_choice: "auto" }),
+            }),
+          });
+
+          if (nvResponse.status >= 500 && attempt < 3) {
+            await new Promise(r => setTimeout(r, attempt * 1000));
+            return makeRequest(msgs, attempt + 1);
+          }
+          if (nvResponse.ok || nvResponse.status < 500) {
+            console.log(`NVIDIA NIM ok: ${nvResponse.status} (model=${nvidiaModel})`);
+            return nvResponse;
+          }
+        } catch (nvErr) {
+          console.error('NVIDIA NIM exception, falling back to Lovable AI:', nvErr);
+        }
+      }
+
+      // Fallback: Lovable AI Gateway
+      console.log('Falling back to Lovable AI Gateway');
+      const effectiveModel = hasVision ? 'google/gemini-2.5-flash' : selectedModel;
       const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
