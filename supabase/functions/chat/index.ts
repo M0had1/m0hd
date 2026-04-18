@@ -459,7 +459,8 @@ Use remember_user_info when the user shares personal info (name, preferences, et
 - ALWAYS search for: current events, news, sports scores, weather, stock prices, people's ages/status, recent releases, ANY 2024/2025/2026 events, deaths, elections, wars, conflicts, technology updates, company news, product launches, pop culture, movies, TV shows, music releases, game releases, scientific discoveries, political events, natural disasters, celebrity news, AI developments, crypto prices, new laws/regulations.
 - SEARCH FIRST, answer second. NEVER guess about facts from 2024, 2025, or 2026. A wrong answer is worse than saying "let me search for that."
 - Make MULTIPLE searches with different queries if the first search doesn't give good results. Try rephrasing, adding the year, or being more specific.
-- Always cite your sources with links when available.
+- MANDATORY CITATIONS: When you used web_search, your final answer MUST include a "**Sources**" section at the end listing every URL you relied on as markdown links. Inline-cite specific facts using [1], [2] markers tied to that list.
+- MANDATORY TIMESTAMP: When you used web_search, end the answer with a line: \`_Information retrieved on ${new Date().toISOString()}_\`.
 - If search returns no results, clearly state that you couldn't verify the information online and that your knowledge may be outdated.
 - For questions about "today", "this week", "latest", "current", "recent", "new", "now" — ALWAYS search.
 - For ANY factual question (who is the president, who won a game, what is the latest version, etc.) — ALWAYS search.
@@ -491,6 +492,105 @@ Use remember_user_info when the user shares personal info (name, preferences, et
 
     const NVIDIA_API_KEY = Deno.env.get('api');
 
+    // Shared web search helper (used by both the tool handler and the auto-trigger)
+    const performWebSearch = async (query: string): Promise<string> => {
+      try {
+        const searchParts: string[] = [];
+
+        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+        const ddgResp = await fetch(ddgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
+        if (ddgResp.ok) {
+          const ddgData = await ddgResp.json();
+          if (ddgData.Abstract) searchParts.push(`Summary: ${ddgData.Abstract} (Source: ${ddgData.AbstractSource || 'N/A'})`);
+          if (ddgData.Answer) searchParts.push(`Direct Answer: ${ddgData.Answer}`);
+          if (ddgData.Definition) searchParts.push(`Definition: ${ddgData.Definition}`);
+          if (ddgData.RelatedTopics?.length > 0) {
+            for (const t of ddgData.RelatedTopics.slice(0, 8)) {
+              if (t.Text) searchParts.push(`- ${t.Text}${t.FirstURL ? ' (' + t.FirstURL + ')' : ''}`);
+            }
+          }
+        }
+
+        try {
+          const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/ /g, '_'))}`;
+          const wikiResp = await fetch(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
+          if (wikiResp.ok) {
+            const wikiData = await wikiResp.json();
+            if (wikiData.extract && wikiData.extract.length > 50) {
+              searchParts.push(`\nWikipedia: ${wikiData.extract} (${wikiData.content_urls?.desktop?.page || ''})`);
+            }
+          }
+        } catch (_) { /* ignore */ }
+
+        try {
+          const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+          const liteResp = await fetch(liteUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          });
+          if (liteResp.ok) {
+            const html = await liteResp.text();
+            const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
+            const linkRegex = /<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+            let m;
+            const webResults: string[] = [];
+            const webLinks: { url: string; title: string }[] = [];
+            while ((m = linkRegex.exec(html)) !== null && webLinks.length < 10) {
+              const url = m[1].replace(/&amp;/g, '&');
+              const title = m[2].replace(/<[^>]*>/g, '').trim();
+              if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
+            }
+            while ((m = snippetRegex.exec(html)) !== null && webResults.length < 10) {
+              const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+              if (snippet) webResults.push(snippet);
+            }
+            for (let i = 0; i < Math.max(webLinks.length, webResults.length); i++) {
+              const link = webLinks[i];
+              const snippet = webResults[i];
+              if (link) searchParts.push(`\n${i + 1}. ${link.title} (${link.url})`);
+              if (snippet) searchParts.push(`   ${snippet}`);
+            }
+          }
+        } catch (_) { /* ignore */ }
+
+        return searchParts.length > 0
+          ? `Web search results for "${query}" (searched on ${new Date().toISOString()}):\n\n${searchParts.join('\n')}`
+          : `No specific results found for "${query}".`;
+      } catch (err) {
+        console.error('performWebSearch error:', err);
+        return `Search failed for "${query}".`;
+      }
+    };
+
+    // Detect time-sensitive / news queries from the latest user message and auto-inject fresh search context
+    const isTimeSensitive = (text: string): boolean => {
+      const t = text.toLowerCase();
+      const keywords = [
+        'today', 'tonight', 'tomorrow', 'yesterday', 'this week', 'this month', 'this year',
+        'latest', 'current', 'currently', 'recent', 'recently', 'now', 'breaking', 'news',
+        'update', 'updates', 'live', 'happening', 'just announced', 'just released',
+        'who won', 'score', 'weather', 'stock', 'price', 'market', 'crypto', 'bitcoin',
+        'election', 'president', 'prime minister', 'died', 'death', 'killed', 'war',
+        'released', 'launch', 'launched', 'announce', 'announced',
+        '2024', '2025', '2026', 'this season',
+      ];
+      return keywords.some(k => t.includes(k));
+    };
+
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
+    let injectedSearchContext = '';
+    if (lastUserMsg) {
+      const userText = typeof lastUserMsg.content === 'string'
+        ? lastUserMsg.content
+        : Array.isArray(lastUserMsg.content)
+          ? lastUserMsg.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ')
+          : '';
+      if (userText && isTimeSensitive(userText)) {
+        console.log('Auto-triggering web_search for time-sensitive query:', userText.substring(0, 120));
+        const searchResults = await performWebSearch(userText.substring(0, 300));
+        injectedSearchContext = `\n\n## LIVE WEB SEARCH RESULTS (auto-fetched at ${new Date().toISOString()})\nThe user's question is time-sensitive. Live results are below — base your answer on these, cite the URLs, and end with the retrieval timestamp:\n\n${searchResults}\n\nIf these results are insufficient, call web_search again with a refined query.`;
+      }
+    }
+
     const makeRequest = async (msgs: any[], attempt = 1): Promise<Response> => {
       const hasVision = msgs.some(m =>
         Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
@@ -505,7 +605,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
 - If it's a diagram, chart, or graph, interpret and explain it.
 - If it's a code screenshot, read the code and explain or debug it.
 - Be precise, accurate, and give direct answers. Do NOT say you cannot see or analyze images.`
-        : systemPrompt;
+        : systemPrompt + injectedSearchContext;
 
       // Primary: NVIDIA NIM (mapped to NVIDIA-hosted models)
       const nvidiaModel = hasVision
@@ -681,89 +781,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
                 result = 'Image generation failed. Please try again.';
               }
             } else if (name === 'web_search') {
-              try {
-                // Use DuckDuckGo instant answer + lite HTML for comprehensive results
-                const searchParts: string[] = [];
-                
-                // DuckDuckGo Instant Answer
-                const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(args.query)}&format=json&no_html=1&skip_disambig=1`;
-                const ddgResp = await fetch(ddgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
-                if (ddgResp.ok) {
-                  const ddgData = await ddgResp.json();
-                  if (ddgData.Abstract) searchParts.push(`Summary: ${ddgData.Abstract} (Source: ${ddgData.AbstractSource || 'N/A'})`);
-                  if (ddgData.Answer) searchParts.push(`Direct Answer: ${ddgData.Answer}`);
-                  if (ddgData.Definition) searchParts.push(`Definition: ${ddgData.Definition}`);
-                  if (ddgData.Infobox?.content) {
-                    for (const f of ddgData.Infobox.content.slice(0, 10)) {
-                      if (f.label && f.value) searchParts.push(`${f.label}: ${f.value}`);
-                    }
-                  }
-                  if (ddgData.RelatedTopics?.length > 0) {
-                    for (const t of ddgData.RelatedTopics.slice(0, 10)) {
-                      if (t.Text) searchParts.push(`- ${t.Text}${t.FirstURL ? ' (' + t.FirstURL + ')' : ''}`);
-                      else if (t.Topics) {
-                        for (const sub of t.Topics.slice(0, 3)) {
-                          if (sub.Text) searchParts.push(`- ${sub.Text}${sub.FirstURL ? ' (' + sub.FirstURL + ')' : ''}`);
-                        }
-                      }
-                    }
-                  }
-                }
-
-              // Wikipedia API for factual/encyclopedic queries
-                try {
-                  const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(args.query.replace(/ /g, '_'))}`;
-                  const wikiResp = await fetch(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
-                  if (wikiResp.ok) {
-                    const wikiData = await wikiResp.json();
-                    if (wikiData.extract && wikiData.extract.length > 50) {
-                      searchParts.push(`\nWikipedia: ${wikiData.extract} (${wikiData.content_urls?.desktop?.page || ''})`);
-                    }
-                  }
-                } catch (wikiErr) {
-                  console.error('Wikipedia error:', wikiErr);
-                }
-
-                // DuckDuckGo Lite HTML for actual web results
-                try {
-                  const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(args.query)}`;
-                  const liteResp = await fetch(liteUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                  });
-                  if (liteResp.ok) {
-                    const html = await liteResp.text();
-                    const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
-                    const linkRegex = /<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
-                    let m;
-                    const webResults: string[] = [];
-                    const webLinks: { url: string; title: string }[] = [];
-                    while ((m = linkRegex.exec(html)) !== null && webLinks.length < 10) {
-                      const url = m[1].replace(/&amp;/g, '&');
-                      const title = m[2].replace(/<[^>]*>/g, '').trim();
-                      if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
-                    }
-                    while ((m = snippetRegex.exec(html)) !== null && webResults.length < 10) {
-                      const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
-                      if (snippet) webResults.push(snippet);
-                    }
-                    for (let i = 0; i < Math.max(webLinks.length, webResults.length); i++) {
-                      const link = webLinks[i];
-                      const snippet = webResults[i];
-                      if (link) searchParts.push(`\n${i + 1}. ${link.title} (${link.url})`);
-                      if (snippet) searchParts.push(`   ${snippet}`);
-                    }
-                  }
-                } catch (liteErr) {
-                  console.error('Lite search error:', liteErr);
-                }
-
-                result = searchParts.length > 0 
-                  ? `Web search results for "${args.query}" (searched on ${new Date().toISOString()}):\n\n${searchParts.join('\n')}`
-                  : `No specific results found for "${args.query}". Answer based on your knowledge but clearly state you could not verify this online.`;
-              } catch (searchErr) {
-                console.error('Web search error:', searchErr);
-                result = 'Search failed. Answer based on your knowledge but note that you could not verify online.';
-              }
+              result = await performWebSearch(args.query);
             } else if (name === 'remember_user_info') {
               const saved = await saveMemory(args.key, args.value, args.category || 'general');
               result = saved ? `Remembered: ${args.key} = "${args.value}"` : 'Memory save failed';
