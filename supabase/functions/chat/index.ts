@@ -459,7 +459,8 @@ Use remember_user_info when the user shares personal info (name, preferences, et
 - ALWAYS search for: current events, news, sports scores, weather, stock prices, people's ages/status, recent releases, ANY 2024/2025/2026 events, deaths, elections, wars, conflicts, technology updates, company news, product launches, pop culture, movies, TV shows, music releases, game releases, scientific discoveries, political events, natural disasters, celebrity news, AI developments, crypto prices, new laws/regulations.
 - SEARCH FIRST, answer second. NEVER guess about facts from 2024, 2025, or 2026. A wrong answer is worse than saying "let me search for that."
 - Make MULTIPLE searches with different queries if the first search doesn't give good results. Try rephrasing, adding the year, or being more specific.
-- Always cite your sources with links when available.
+- MANDATORY CITATIONS: When you used web_search, your final answer MUST include a "**Sources**" section at the end listing every URL you relied on as markdown links. Inline-cite specific facts using [1], [2] markers tied to that list.
+- MANDATORY TIMESTAMP: When you used web_search, end the answer with a line: \`_Information retrieved on ${new Date().toISOString()}_\`.
 - If search returns no results, clearly state that you couldn't verify the information online and that your knowledge may be outdated.
 - For questions about "today", "this week", "latest", "current", "recent", "new", "now" — ALWAYS search.
 - For ANY factual question (who is the president, who won a game, what is the latest version, etc.) — ALWAYS search.
