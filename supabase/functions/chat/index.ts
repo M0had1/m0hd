@@ -492,88 +492,105 @@ Use remember_user_info when the user shares personal info (name, preferences, et
 
     const NVIDIA_API_KEY = Deno.env.get('api');
 
-    // Shared web search helper (used by both the tool handler and the auto-trigger)
-    const performWebSearch = async (query: string): Promise<string> => {
+    // Bounded fetch with timeout to prevent hanging the edge function
+    const fetchWithTimeout = async (url: string, init: RequestInit = {}, ms = 8000): Promise<Response> => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), ms);
       try {
-        const searchParts: string[] = [];
-
-        const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const ddgResp = await fetch(ddgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
-        if (ddgResp.ok) {
-          const ddgData = await ddgResp.json();
-          if (ddgData.Abstract) searchParts.push(`Summary: ${ddgData.Abstract} (Source: ${ddgData.AbstractSource || 'N/A'})`);
-          if (ddgData.Answer) searchParts.push(`Direct Answer: ${ddgData.Answer}`);
-          if (ddgData.Definition) searchParts.push(`Definition: ${ddgData.Definition}`);
-          if (ddgData.RelatedTopics?.length > 0) {
-            for (const t of ddgData.RelatedTopics.slice(0, 8)) {
-              if (t.Text) searchParts.push(`- ${t.Text}${t.FirstURL ? ' (' + t.FirstURL + ')' : ''}`);
-            }
-          }
-        }
-
-        try {
-          const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/ /g, '_'))}`;
-          const wikiResp = await fetch(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI Assistant/1.0)' } });
-          if (wikiResp.ok) {
-            const wikiData = await wikiResp.json();
-            if (wikiData.extract && wikiData.extract.length > 50) {
-              searchParts.push(`\nWikipedia: ${wikiData.extract} (${wikiData.content_urls?.desktop?.page || ''})`);
-            }
-          }
-        } catch (_) { /* ignore */ }
-
-        try {
-          const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
-          const liteResp = await fetch(liteUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-          });
-          if (liteResp.ok) {
-            const html = await liteResp.text();
-            const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
-            const linkRegex = /<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
-            let m;
-            const webResults: string[] = [];
-            const webLinks: { url: string; title: string }[] = [];
-            while ((m = linkRegex.exec(html)) !== null && webLinks.length < 10) {
-              const url = m[1].replace(/&amp;/g, '&');
-              const title = m[2].replace(/<[^>]*>/g, '').trim();
-              if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
-            }
-            while ((m = snippetRegex.exec(html)) !== null && webResults.length < 10) {
-              const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
-              if (snippet) webResults.push(snippet);
-            }
-            for (let i = 0; i < Math.max(webLinks.length, webResults.length); i++) {
-              const link = webLinks[i];
-              const snippet = webResults[i];
-              if (link) searchParts.push(`\n${i + 1}. ${link.title} (${link.url})`);
-              if (snippet) searchParts.push(`   ${snippet}`);
-            }
-          }
-        } catch (_) { /* ignore */ }
-
-        return searchParts.length > 0
-          ? `Web search results for "${query}" (searched on ${new Date().toISOString()}):\n\n${searchParts.join('\n')}`
-          : `No specific results found for "${query}".`;
-      } catch (err) {
-        console.error('performWebSearch error:', err);
-        return `Search failed for "${query}".`;
+        return await fetch(url, { ...init, signal: ctrl.signal });
+      } finally {
+        clearTimeout(t);
       }
     };
 
-    // Detect time-sensitive / news queries from the latest user message and auto-inject fresh search context
+    // Shared web search helper — runs sources in parallel with strict timeouts
+    const performWebSearch = async (query: string): Promise<string> => {
+      const searchParts: string[] = [];
+      const ua = 'Mozilla/5.0 (compatible; AI Assistant/1.0)';
+
+      const ddgPromise = (async () => {
+        try {
+          const r = await fetchWithTimeout(
+            `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+            { headers: { 'User-Agent': ua } }, 6000
+          );
+          if (!r.ok) return;
+          const d = await r.json();
+          if (d.Abstract) searchParts.push(`Summary: ${d.Abstract} (Source: ${d.AbstractSource || 'N/A'})`);
+          if (d.Answer) searchParts.push(`Direct Answer: ${d.Answer}`);
+          if (d.Definition) searchParts.push(`Definition: ${d.Definition}`);
+          if (d.RelatedTopics?.length) {
+            for (const t of d.RelatedTopics.slice(0, 6)) {
+              if (t.Text) searchParts.push(`- ${t.Text}${t.FirstURL ? ' (' + t.FirstURL + ')' : ''}`);
+            }
+          }
+        } catch (_) {}
+      })();
+
+      const wikiPromise = (async () => {
+        try {
+          const r = await fetchWithTimeout(
+            `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/ /g, '_'))}`,
+            { headers: { 'User-Agent': ua } }, 5000
+          );
+          if (!r.ok) return;
+          const d = await r.json();
+          if (d.extract && d.extract.length > 50) {
+            searchParts.push(`\nWikipedia: ${d.extract} (${d.content_urls?.desktop?.page || ''})`);
+          }
+        } catch (_) {}
+      })();
+
+      const litePromise = (async () => {
+        try {
+          const r = await fetchWithTimeout(
+            `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+            { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, 7000
+          );
+          if (!r.ok) return;
+          const html = await r.text();
+          const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
+          const linkRegex = /<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+          const webLinks: { url: string; title: string }[] = [];
+          const webResults: string[] = [];
+          let m;
+          while ((m = linkRegex.exec(html)) !== null && webLinks.length < 8) {
+            const url = m[1].replace(/&amp;/g, '&');
+            const title = m[2].replace(/<[^>]*>/g, '').trim();
+            if (title && url && !url.includes('duckduckgo.com')) webLinks.push({ url, title });
+          }
+          while ((m = snippetRegex.exec(html)) !== null && webResults.length < 8) {
+            const snippet = m[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+            if (snippet) webResults.push(snippet);
+          }
+          for (let i = 0; i < Math.max(webLinks.length, webResults.length); i++) {
+            if (webLinks[i]) searchParts.push(`\n${i + 1}. ${webLinks[i].title} (${webLinks[i].url})`);
+            if (webResults[i]) searchParts.push(`   ${webResults[i]}`);
+          }
+        } catch (_) {}
+      })();
+
+      await Promise.allSettled([ddgPromise, wikiPromise, litePromise]);
+
+      return searchParts.length > 0
+        ? `Web search results for "${query}" (searched on ${new Date().toISOString()}):\n\n${searchParts.join('\n')}`
+        : `No specific results found for "${query}".`;
+    };
+
+    // Detect time-sensitive / news queries — only fire on STRONG signals to avoid latency on every message
     const isTimeSensitive = (text: string): boolean => {
-      const t = text.toLowerCase();
-      const keywords = [
-        'today', 'tonight', 'tomorrow', 'yesterday', 'this week', 'this month', 'this year',
-        'latest', 'current', 'currently', 'recent', 'recently', 'now', 'breaking', 'news',
-        'update', 'updates', 'live', 'happening', 'just announced', 'just released',
-        'who won', 'score', 'weather', 'stock', 'price', 'market', 'crypto', 'bitcoin',
-        'election', 'president', 'prime minister', 'died', 'death', 'killed', 'war',
-        'released', 'launch', 'launched', 'announce', 'announced',
-        '2024', '2025', '2026', 'this season',
+      const t = text.toLowerCase().trim();
+      if (t.length < 3) return false;
+      // Strong signals: explicit time words or explicit news/event terms
+      const strongPhrases = [
+        'today', 'tonight', 'yesterday', 'this week', 'this month',
+        'latest news', 'breaking news', 'current news', 'recent news',
+        'who won', 'who is winning', 'live score', 'weather in', 'stock price',
+        'who is the president', 'who is the prime minister',
+        'died', 'death of', 'just announced', 'just released',
+        ' 2025', ' 2026', 'this season',
       ];
-      return keywords.some(k => t.includes(k));
+      return strongPhrases.some(k => t.includes(k));
     };
 
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
@@ -586,8 +603,12 @@ Use remember_user_info when the user shares personal info (name, preferences, et
           : '';
       if (userText && isTimeSensitive(userText)) {
         console.log('Auto-triggering web_search for time-sensitive query:', userText.substring(0, 120));
-        const searchResults = await performWebSearch(userText.substring(0, 300));
-        injectedSearchContext = `\n\n## LIVE WEB SEARCH RESULTS (auto-fetched at ${new Date().toISOString()})\nThe user's question is time-sensitive. Live results are below — base your answer on these, cite the URLs, and end with the retrieval timestamp:\n\n${searchResults}\n\nIf these results are insufficient, call web_search again with a refined query.`;
+        try {
+          const searchResults = await performWebSearch(userText.substring(0, 300));
+          injectedSearchContext = `\n\n## LIVE WEB SEARCH RESULTS (auto-fetched at ${new Date().toISOString()})\nThe user's question is time-sensitive. Live results are below — base your answer on these, cite the URLs, and end with the retrieval timestamp:\n\n${searchResults}`;
+        } catch (e) {
+          console.error('Auto-search failed, continuing without:', e);
+        }
       }
     }
 
@@ -614,7 +635,10 @@ You have been given an image to analyze. Study it carefully and thoroughly.
 
       if (NVIDIA_API_KEY) {
         try {
-          const nvResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+          // CRITICAL: Llama 3.3 on NVIDIA NIM has unreliable tool-calling round-trips,
+          // which breaks mid-conversation. Disable tools here — auto web search above
+          // already injects fresh context for time-sensitive queries.
+          const nvResponse = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${NVIDIA_API_KEY}`,
@@ -624,11 +648,10 @@ You have been given an image to analyze. Study it carefully and thoroughly.
               model: nvidiaModel,
               messages: [{ role: 'system', content: effectiveSystemPrompt }, ...msgs],
               stream: false,
-              max_tokens: 4096,
+              max_tokens: 8192,
               temperature: 0.7,
-              ...(hasVision ? {} : { tools, tool_choice: "auto" }),
             }),
-          });
+          }, 90000);
 
           if (nvResponse.status >= 500 && attempt < 3) {
             await new Promise(r => setTimeout(r, attempt * 1000));
@@ -646,7 +669,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
       // Fallback: Lovable AI Gateway
       console.log('Falling back to Lovable AI Gateway');
       const effectiveModel = hasVision ? 'google/gemini-2.5-flash' : selectedModel;
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const response = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -658,7 +681,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
           stream: false,
           ...(hasVision ? {} : { tools, tool_choice: "auto" }),
         }),
-      });
+      }, 90000);
       if (response.status >= 500 && attempt < 3) {
         await new Promise(r => setTimeout(r, attempt * 1000));
         return makeRequest(msgs, attempt + 1);
