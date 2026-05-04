@@ -760,6 +760,8 @@ export const useChat = () => {
       const decoder = new TextDecoder();
       let fullContent = '';
       let textBuffer = '';
+      let sawDoneMarker = false;
+      let finishReason: string | null = null;
 
       let rafId: number | null = null;
       let pendingContent = '';
@@ -800,6 +802,7 @@ export const useChat = () => {
 
           const jsonStr = line.slice(6).trim();
           if (jsonStr === '[DONE]') {
+            sawDoneMarker = true;
             streamDone = true;
             break;
           }
@@ -807,6 +810,7 @@ export const useChat = () => {
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+            finishReason = parsed.choices?.[0]?.finish_reason ?? finishReason;
             if (delta) {
               fullContent += delta;
               pendingContent = fullContent;
@@ -827,11 +831,15 @@ export const useChat = () => {
           if (raw.startsWith(':') || raw.trim() === '') continue;
           if (!raw.startsWith('data: ')) continue;
           const jsonStr = raw.slice(6).trim();
-          if (jsonStr === '[DONE]') continue;
+          if (jsonStr === '[DONE]') {
+            sawDoneMarker = true;
+            continue;
+          }
 
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+            finishReason = parsed.choices?.[0]?.finish_reason ?? finishReason;
             if (delta) fullContent += delta;
           } catch {
             // ignore leftover partial fragment
@@ -841,6 +849,10 @@ export const useChat = () => {
 
       if (!fullContent.trim()) {
         fullContent = 'I could not generate a response this time. Please retry your message.';
+      } else if (!sawDoneMarker) {
+        fullContent += '\n\n⚠️ Response connection closed before the completion signal. If this answer looks incomplete, please retry.';
+      } else if (finishReason === 'length') {
+        fullContent += '\n\n⚠️ Response reached the length limit. Ask me to continue if you need the rest.';
       }
 
       if (rafId !== null) cancelAnimationFrame(rafId);
