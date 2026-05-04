@@ -492,6 +492,7 @@ export const useChat = () => {
     setIsLoading(true);
 
     let assistantMessageId: string | null = null;
+    let didTimeout = false;
 
     try {
       // Process attachments safely (never crash the chat on file parsing)
@@ -712,7 +713,10 @@ export const useChat = () => {
 
       let chatResponseStarted = false;
       const chatTimeout = window.setTimeout(() => {
-        if (!chatResponseStarted) controller.abort('chat-start-timeout');
+        if (!chatResponseStarted) {
+          didTimeout = true;
+          controller.abort();
+        }
       }, 120_000);
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
@@ -865,6 +869,34 @@ export const useChat = () => {
       });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
+        if (didTimeout && assistantMessageId) {
+          setConversations(prev =>
+            prev.map(conv =>
+              conv.id === conversationId
+                ? {
+                    ...conv,
+                    messages: conv.messages.map(msg =>
+                      msg.id === assistantMessageId
+                        ? {
+                            ...msg,
+                            content: '⚠️ The AI response took too long to start. Please retry your message.',
+                            isStreaming: false,
+                            isError: true,
+                          }
+                        : msg
+                    ),
+                  }
+                : conv
+            )
+          );
+          toast({
+            title: 'Response timed out',
+            description: 'Please try again with a shorter message or fewer attachments.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         setConversations(prev =>
           prev.map(conv =>
             conv.id === conversationId
