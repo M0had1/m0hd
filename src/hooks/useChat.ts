@@ -9,6 +9,8 @@ import { cacheConversations, loadCachedConversations, isOffline } from '@/lib/of
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const MAX_CONTEXT_MESSAGES = 80;
+const MAX_CONTEXT_CHARS = 60_000;
+const MAX_SINGLE_CONTEXT_MESSAGE_CHARS = 12_000;
 const MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024;
 
 // Convert file to base64
@@ -156,6 +158,28 @@ const extractCodeBlocks = (content: string): { code: string; language: string }[
   }
   
   return blocks;
+};
+
+const trimForModelContext = (content: string): string => {
+  if (content.length <= MAX_SINGLE_CONTEXT_MESSAGE_CHARS) return content;
+  const keepHead = Math.floor(MAX_SINGLE_CONTEXT_MESSAGE_CHARS * 0.35);
+  const keepTail = MAX_SINGLE_CONTEXT_MESSAGE_CHARS - keepHead;
+  return `${content.slice(0, keepHead)}\n\n[Earlier message trimmed for stability]\n\n${content.slice(-keepTail)}`;
+};
+
+const buildStableContextMessages = (messages: Message[]): Array<{ role: 'user' | 'assistant'; content: string }> => {
+  const result: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  let usedChars = 0;
+
+  for (const message of messages.slice(-MAX_CONTEXT_MESSAGES).reverse()) {
+    if (message.isError || !message.content?.trim()) continue;
+    const content = trimForModelContext(message.content);
+    if (usedChars + content.length > MAX_CONTEXT_CHARS && result.length > 0) break;
+    result.unshift({ role: message.role, content });
+    usedChars += content.length;
+  }
+
+  return result;
 };
 
 export const useChat = () => {
