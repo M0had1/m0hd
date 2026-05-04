@@ -563,7 +563,7 @@ export const useChat = () => {
 
       const currentConversation = conversationsRef.current.find(c => c.id === conversationId);
       const previousMessages = currentConversation?.messages || [];
-      const contextMessages = previousMessages.slice(-MAX_CONTEXT_MESSAGES);
+      const contextMessages = buildStableContextMessages(previousMessages);
 
       const isFirstMessage = previousMessages.length === 0;
       const newTitle = isFirstMessage ? content.slice(0, 30) + (content.length > 30 ? '...' : '') : null;
@@ -662,10 +662,7 @@ export const useChat = () => {
         return;
       }
 
-      const apiMessages: Array<{ role: 'user' | 'assistant'; content: any }> = contextMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const apiMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [...contextMessages];
 
       let fullTextContent = content + textFileContents;
 
@@ -713,6 +710,11 @@ export const useChat = () => {
         systemPrompt = `You are having a casual, natural voice conversation with your friend. Keep your responses SHORT (1-3 sentences max), conversational, and warm — like talking on the phone. Don't use markdown, bullet points, code blocks, or any formatting. Don't say "Sure!" or "Of course!" too much. Just talk naturally like a real person would. Be friendly, witty, and engaging. If they ask something complex, give a brief answer and ask if they want more detail.`;
       }
 
+      let chatResponseStarted = false;
+      const chatTimeout = window.setTimeout(() => {
+        if (!chatResponseStarted) controller.abort('chat-start-timeout');
+      }, 120_000);
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
@@ -721,7 +723,9 @@ export const useChat = () => {
         },
         body: JSON.stringify({ messages: apiMessages, systemPrompt, model: selectedModel }),
         signal: controller.signal,
-      });
+      }).finally(() => window.clearTimeout(chatTimeout));
+
+      chatResponseStarted = true;
 
       if (!response.ok) {
         const errorText = await response.text();
