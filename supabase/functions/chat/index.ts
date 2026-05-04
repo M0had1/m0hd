@@ -693,7 +693,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
     
     while (iterations < 5) {
       iterations++;
-      const response = await makeRequest(currentMessages);
+      const { response, streamed } = await makeRequest(currentMessages);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -709,6 +709,12 @@ You have been given an image to analyze. Study it carefully and thoroughly.
           });
         }
         throw new Error(`AI API error: ${response.status}`);
+      }
+
+      if (streamed) {
+        return new Response(response.body, {
+          headers: { ...corsHeaders, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        });
       }
 
       const data = await response.json();
