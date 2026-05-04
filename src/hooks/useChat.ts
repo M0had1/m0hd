@@ -9,6 +9,8 @@ import { cacheConversations, loadCachedConversations, isOffline } from '@/lib/of
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const MAX_CONTEXT_MESSAGES = 80;
+const MAX_CONTEXT_CHARS = 60_000;
+const MAX_SINGLE_CONTEXT_MESSAGE_CHARS = 12_000;
 const MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024;
 
 // Convert file to base64
@@ -156,6 +158,28 @@ const extractCodeBlocks = (content: string): { code: string; language: string }[
   }
   
   return blocks;
+};
+
+const trimForModelContext = (content: string): string => {
+  if (content.length <= MAX_SINGLE_CONTEXT_MESSAGE_CHARS) return content;
+  const keepHead = Math.floor(MAX_SINGLE_CONTEXT_MESSAGE_CHARS * 0.35);
+  const keepTail = MAX_SINGLE_CONTEXT_MESSAGE_CHARS - keepHead;
+  return `${content.slice(0, keepHead)}\n\n[Earlier message trimmed for stability]\n\n${content.slice(-keepTail)}`;
+};
+
+const buildStableContextMessages = (messages: Message[]): Array<{ role: 'user' | 'assistant'; content: string }> => {
+  const result: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  let usedChars = 0;
+
+  for (const message of messages.slice(-MAX_CONTEXT_MESSAGES).reverse()) {
+    if (message.isError || !message.content?.trim()) continue;
+    const content = trimForModelContext(message.content);
+    if (usedChars + content.length > MAX_CONTEXT_CHARS && result.length > 0) break;
+    result.unshift({ role: message.role, content });
+    usedChars += content.length;
+  }
+
+  return result;
 };
 
 export const useChat = () => {
@@ -468,6 +492,7 @@ export const useChat = () => {
     setIsLoading(true);
 
     let assistantMessageId: string | null = null;
+    let didTimeout = false;
 
     try {
       // Process attachments safely (never crash the chat on file parsing)
@@ -539,7 +564,7 @@ export const useChat = () => {
 
       const currentConversation = conversationsRef.current.find(c => c.id === conversationId);
       const previousMessages = currentConversation?.messages || [];
-      const contextMessages = previousMessages.slice(-MAX_CONTEXT_MESSAGES);
+      const contextMessages = buildStableContextMessages(previousMessages);
 
       const isFirstMessage = previousMessages.length === 0;
       const newTitle = isFirstMessage ? content.slice(0, 30) + (content.length > 30 ? '...' : '') : null;
@@ -638,10 +663,7 @@ export const useChat = () => {
         return;
       }
 
-      const apiMessages: Array<{ role: 'user' | 'assistant'; content: any }> = contextMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const apiMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [...contextMessages];
 
       let fullTextContent = content + textFileContents;
 
@@ -689,6 +711,14 @@ export const useChat = () => {
         systemPrompt = `You are having a casual, natural voice conversation with your friend. Keep your responses SHORT (1-3 sentences max), conversational, and warm — like talking on the phone. Don't use markdown, bullet points, code blocks, or any formatting. Don't say "Sure!" or "Of course!" too much. Just talk naturally like a real person would. Be friendly, witty, and engaging. If they ask something complex, give a brief answer and ask if they want more detail.`;
       }
 
+      let chatResponseStarted = false;
+      const chatTimeout = window.setTimeout(() => {
+        if (!chatResponseStarted) {
+          didTimeout = true;
+          controller.abort();
+        }
+      }, 120_000);
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
@@ -697,7 +727,9 @@ export const useChat = () => {
         },
         body: JSON.stringify({ messages: apiMessages, systemPrompt, model: selectedModel }),
         signal: controller.signal,
-      });
+      }).finally(() => window.clearTimeout(chatTimeout));
+
+      chatResponseStarted = true;
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -728,6 +760,8 @@ export const useChat = () => {
       const decoder = new TextDecoder();
       let fullContent = '';
       let textBuffer = '';
+      let sawDoneMarker = false;
+      let finishReason: string | null = null;
 
       let rafId: number | null = null;
       let pendingContent = '';
@@ -768,6 +802,7 @@ export const useChat = () => {
 
           const jsonStr = line.slice(6).trim();
           if (jsonStr === '[DONE]') {
+            sawDoneMarker = true;
             streamDone = true;
             break;
           }
@@ -775,6 +810,7 @@ export const useChat = () => {
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+            finishReason = parsed.choices?.[0]?.finish_reason ?? finishReason;
             if (delta) {
               fullContent += delta;
               pendingContent = fullContent;
@@ -795,11 +831,15 @@ export const useChat = () => {
           if (raw.startsWith(':') || raw.trim() === '') continue;
           if (!raw.startsWith('data: ')) continue;
           const jsonStr = raw.slice(6).trim();
-          if (jsonStr === '[DONE]') continue;
+          if (jsonStr === '[DONE]') {
+            sawDoneMarker = true;
+            continue;
+          }
 
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+            finishReason = parsed.choices?.[0]?.finish_reason ?? finishReason;
             if (delta) fullContent += delta;
           } catch {
             // ignore leftover partial fragment
@@ -809,6 +849,10 @@ export const useChat = () => {
 
       if (!fullContent.trim()) {
         fullContent = 'I could not generate a response this time. Please retry your message.';
+      } else if (!sawDoneMarker) {
+        fullContent += '\n\n⚠️ Response connection closed before the completion signal. If this answer looks incomplete, please retry.';
+      } else if (finishReason === 'length') {
+        fullContent += '\n\n⚠️ Response reached the length limit. Ask me to continue if you need the rest.';
       }
 
       if (rafId !== null) cancelAnimationFrame(rafId);
@@ -837,6 +881,34 @@ export const useChat = () => {
       });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
+        if (didTimeout && assistantMessageId) {
+          setConversations(prev =>
+            prev.map(conv =>
+              conv.id === conversationId
+                ? {
+                    ...conv,
+                    messages: conv.messages.map(msg =>
+                      msg.id === assistantMessageId
+                        ? {
+                            ...msg,
+                            content: '⚠️ The AI response took too long to start. Please retry your message.',
+                            isStreaming: false,
+                            isError: true,
+                          }
+                        : msg
+                    ),
+                  }
+                : conv
+            )
+          );
+          toast({
+            title: 'Response timed out',
+            description: 'Please try again with a shorter message or fewer attachments.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         setConversations(prev =>
           prev.map(conv =>
             conv.id === conversationId

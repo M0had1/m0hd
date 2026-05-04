@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface MessageContent {
@@ -612,7 +612,7 @@ Use remember_user_info when the user shares personal info (name, preferences, et
       }
     }
 
-    const makeRequest = async (msgs: any[], attempt = 1): Promise<Response> => {
+    const makeRequest = async (msgs: any[], attempt = 1): Promise<{ response: Response; streamed: boolean }> => {
       const hasVision = msgs.some(m =>
         Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
       );
@@ -635,9 +635,8 @@ You have been given an image to analyze. Study it carefully and thoroughly.
 
       if (NVIDIA_API_KEY) {
         try {
-          // CRITICAL: Llama 3.3 on NVIDIA NIM has unreliable tool-calling round-trips,
-          // which breaks mid-conversation. Disable tools here — auto web search above
-          // already injects fresh context for time-sensitive queries.
+          // Stream directly from NVIDIA so the browser receives tokens continuously
+          // instead of waiting for one large non-streaming completion.
           const nvResponse = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -647,7 +646,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
             body: JSON.stringify({
               model: nvidiaModel,
               messages: [{ role: 'system', content: effectiveSystemPrompt }, ...msgs],
-              stream: false,
+              stream: true,
               max_tokens: 8192,
               temperature: 0.7,
             }),
@@ -658,8 +657,8 @@ You have been given an image to analyze. Study it carefully and thoroughly.
             return makeRequest(msgs, attempt + 1);
           }
           if (nvResponse.ok || nvResponse.status < 500) {
-            console.log(`NVIDIA NIM ok: ${nvResponse.status} (model=${nvidiaModel})`);
-            return nvResponse;
+            console.log(`NVIDIA NIM streaming: ${nvResponse.status} (model=${nvidiaModel})`);
+            return { response: nvResponse, streamed: true };
           }
         } catch (nvErr) {
           console.error('NVIDIA NIM exception, falling back to Lovable AI:', nvErr);
@@ -686,7 +685,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
         await new Promise(r => setTimeout(r, attempt * 1000));
         return makeRequest(msgs, attempt + 1);
       }
-      return response;
+      return { response, streamed: false };
     };
 
     let currentMessages = [...messages];
@@ -694,7 +693,7 @@ You have been given an image to analyze. Study it carefully and thoroughly.
     
     while (iterations < 5) {
       iterations++;
-      const response = await makeRequest(currentMessages);
+      const { response, streamed } = await makeRequest(currentMessages);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -710,6 +709,12 @@ You have been given an image to analyze. Study it carefully and thoroughly.
           });
         }
         throw new Error(`AI API error: ${response.status}`);
+      }
+
+      if (streamed) {
+        return new Response(response.body, {
+          headers: { ...corsHeaders, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        });
       }
 
       const data = await response.json();
