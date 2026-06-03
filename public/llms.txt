@@ -1,0 +1,11 @@
+# Mohamed's AI
+
+> Intelligent personal AI chat assistant for coding, writing, and analysis with a sleek, modern interface.
+
+Mohamed's AI is a conversational AI platform featuring real-time web search, image generation, code execution, voice mode, and a built-in code IDE. Sign-in is required to chat.
+
+## Pages
+
+- [Home](/): Main chat interface for conversing with Mohamed's AI.
+- [Sign in](/auth): Authentication page (email, Google, Apple).
+- [Install](/install): Install the app as a PWA on mobile or desktop.
