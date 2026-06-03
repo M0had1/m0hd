@@ -29,6 +29,7 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 overflow-auto">
+      <h1 className="sr-only">Mohamed's AI — Intelligent Personal Assistant</h1>
       {/* Logo */}
       <div
         className={cn(
@@ -51,15 +52,15 @@ export const WelcomeScreen = ({ onSendMessage }: WelcomeScreenProps) => {
         </div>
       </div>
 
-      {/* Heading */}
-      <h1
+      {/* Greeting */}
+      <p
         className={cn(
           "text-3xl sm:text-[2.75rem] font-extrabold text-foreground mb-3 text-center tracking-tight transition-all duration-700 ease-out leading-tight",
           stage >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
         )}
       >
         {greeting}
-      </h1>
+      </p>
       <p
         className={cn(
           "text-muted-foreground text-center max-w-md mb-12 text-base sm:text-lg transition-all duration-700 ease-out",

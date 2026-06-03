@@ -59,6 +59,7 @@ export default function Install() {
               variant="ghost"
               size="icon"
               onClick={() => navigate('/')}
+              aria-label="Back to home"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -66,7 +67,9 @@ export default function Install() {
               <span className="text-xl font-bold text-primary-foreground">M</span>
             </div>
           </div>
-          <CardTitle className="text-2xl">Install Mohamed's AI</CardTitle>
+          <CardTitle asChild>
+            <h1 className="text-2xl">Install Mohamed's AI</h1>
+          </CardTitle>
           <CardDescription>
             Get the full app experience with offline support and quick access
           </CardDescription>

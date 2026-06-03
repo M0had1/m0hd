@@ -31,7 +31,7 @@ export const ChatHeader = ({
         <div className="flex items-center gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={onToggleSidebar} className="shrink-0 h-8 w-8 rounded-xl hover:bg-muted">
+              <Button variant="ghost" size="icon-sm" onClick={onToggleSidebar} aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'} className="shrink-0 h-8 w-8 rounded-xl hover:bg-muted">
                 {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
@@ -42,7 +42,7 @@ export const ChatHeader = ({
         <div className="flex items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => navigate('/install')} className="hidden sm:flex h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon-sm" onClick={() => navigate('/install')} aria-label="Install App" className="hidden sm:flex h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
                 <Smartphone className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -50,7 +50,7 @@ export const ChatHeader = ({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => navigate('/ide')} className="hidden sm:flex h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon-sm" onClick={() => navigate('/ide')} aria-label="Code IDE" className="hidden sm:flex h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
                 <FolderCode className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -58,7 +58,7 @@ export const ChatHeader = ({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => navigate('/playground')} className="hidden sm:flex h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon-sm" onClick={() => navigate('/playground')} aria-label="Code Playground" className="hidden sm:flex h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
                 <Code2 className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -69,7 +69,7 @@ export const ChatHeader = ({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon-sm" aria-label="More options" className="h-8 w-8 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

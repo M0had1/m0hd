@@ -183,9 +183,9 @@ export default function Auth() {
 
             {/* Header */}
             <div className="mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
                 {isSignUp ? 'Create account' : 'Welcome back'}
-              </h2>
+              </h1>
               <p className="text-muted-foreground text-sm mt-1">
                 {isSignUp ? 'Get started in under a minute' : 'Pick up where you left off'}
               </p>
