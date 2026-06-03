@@ -67,9 +67,7 @@ export default function Install() {
               <span className="text-xl font-bold text-primary-foreground">M</span>
             </div>
           </div>
-          <CardTitle asChild>
-            <h1 className="text-2xl">Install Mohamed's AI</h1>
-          </CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Install Mohamed's AI</h1>
           <CardDescription>
             Get the full app experience with offline support and quick access
           </CardDescription>
