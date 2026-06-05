@@ -490,7 +490,7 @@ Use remember_user_info when the user shares personal info (name, preferences, et
       return true;
     };
 
-    const NVIDIA_API_KEY = Deno.env.get('api');
+    const NVIDIA_API_KEY = Deno.env.get('nvidia') || Deno.env.get('api');
 
     // Bounded fetch with timeout to prevent hanging the edge function
     const fetchWithTimeout = async (url: string, init: RequestInit = {}, ms = 8000): Promise<Response> => {
