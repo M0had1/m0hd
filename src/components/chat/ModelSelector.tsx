@@ -1,5 +1,4 @@
 import { Check, ChevronDown, Sparkles, Zap, Brain } from 'lucide-react';
-import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
