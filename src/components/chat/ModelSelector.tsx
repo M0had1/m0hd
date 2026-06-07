@@ -41,7 +41,7 @@ export const ModelSelector = () => {
           <ChevronDown className="h-3 w-3 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-64 max-h-[60vh] overflow-y-auto">
         {AI_MODELS.map((model) => {
           const Icon = getModelIcon(model.id);
           const isSelected = selectedModel === model.id;
