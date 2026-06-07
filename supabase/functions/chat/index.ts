@@ -628,15 +628,19 @@ You have been given an image to analyze. Study it carefully and thoroughly.
 - Be precise, accurate, and give direct answers. Do NOT say you cannot see or analyze images.`
         : systemPrompt + injectedSearchContext;
 
-      // Primary: NVIDIA NIM (mapped to NVIDIA-hosted models)
+      // Route by user's selected model.
+      // Lovable AI models (google/*, openai/*) → Lovable AI Gateway.
+      // NVIDIA models (meta/*, nvidia/*) → NVIDIA NIM.
+      // Vision always goes to a vision-capable Lovable model.
+      const isNvidiaModel = /^(meta|nvidia)\//.test(selectedModel);
+      const useNvidia = !hasVision && isNvidiaModel && !!NVIDIA_API_KEY;
+
       const nvidiaModel = hasVision
         ? 'meta/llama-3.2-90b-vision-instruct'
-        : 'meta/llama-3.3-70b-instruct';
+        : (isNvidiaModel ? selectedModel : 'meta/llama-3.3-70b-instruct');
 
-      if (NVIDIA_API_KEY) {
+      if (useNvidia) {
         try {
-          // Stream directly from NVIDIA so the browser receives tokens continuously
-          // instead of waiting for one large non-streaming completion.
           const nvResponse = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -665,9 +669,11 @@ You have been given an image to analyze. Study it carefully and thoroughly.
         }
       }
 
-      // Fallback: Lovable AI Gateway
-      console.log('Falling back to Lovable AI Gateway');
-      const effectiveModel = hasVision ? 'google/gemini-2.5-flash' : selectedModel;
+      // Lovable AI Gateway (primary for google/* and openai/* models, and all vision)
+      const effectiveModel = hasVision
+        ? 'google/gemini-2.5-flash'
+        : (isNvidiaModel ? 'google/gemini-3-flash-preview' : selectedModel);
+      console.log(`Lovable AI Gateway: model=${effectiveModel}`);
       const response = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
