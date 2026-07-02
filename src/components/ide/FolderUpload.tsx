@@ -215,12 +215,150 @@ export const FolderUpload = ({ onFilesLoaded }: FolderUploadProps) => {
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files.length > 0) {
-      // For input, we need to handle differently
-      // This is a simplified version
-      toast.info('For best results, drag and drop a folder');
-    }
-  }, []);
+    if (!files || files.length === 0) return;
+
+    const fileMap = new Map<string, FileNode>();
+
+    const readFileContent = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    };
+
+    (async () => {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // @ts-ignore webkitRelativePath exists when webkitdirectory is set
+        const relPath: string = file.webkitRelativePath || file.name;
+
+        const isTextFile =
+          /\.(js|jsx|ts|tsx|py|php|html|htm|css|scss|sass|less|json|xml|md|sql|sh|bash|yml|yaml|java|c|cpp|h|hpp|cs|go|rs|rb|swift|kt|vue|svelte|txt|env|gitignore|dockerfile|makefile|readme)$/i.test(file.name) ||
+          !file.name.includes('.') ||
+          file.type.startsWith('text/');
+
+        if (!isTextFile || file.size >= 1024 * 1024) continue;
+
+        // Register parent folders
+        const parts = relPath.split('/');
+        let cumulative = '';
+        for (let j = 0; j < parts.length - 1; j++) {
+          cumulative = cumulative ? `${cumulative}/${parts[j]}` : parts[j];
+          const key = `__folder__${cumulative}`;
+          if (!fileMap.has(key)) {
+            fileMap.set(key, {
+              id: crypto.randomUUID(),
+              name: parts[j],
+              type: 'folder',
+              children: [],
+              path: cumulative,
+            });
+          }
+        }
+
+        try {
+          const content = await readFileContent(file);
+          fileMap.set(relPath, {
+            id: crypto.randomUUID(),
+            name: file.name,
+            type: 'file',
+            content,
+            language: getLanguageFromFilename(file.name),
+            path: relPath,
+          });
+        } catch {
+          console.warn(`Could not read file: ${file.name}`);
+        }
+      }
+
+      // Build tree (same logic as drop handler)
+      const root: FileNode[] = [];
+      const folders = new Map<string, FileNode>();
+
+      const folderKeys = Array.from(fileMap.keys()).filter(k => k.startsWith('__folder__')).sort();
+      for (const key of folderKeys) {
+        const folderNode = fileMap.get(key)!;
+        const parts = folderNode.path.split('/');
+        let parent: FileNode[] = root;
+        let currentPath = '';
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          currentPath = currentPath ? `${currentPath}/${part}` : part;
+          if (!folders.has(currentPath)) {
+            const folder: FileNode = {
+              id: i === parts.length - 1 ? folderNode.id : crypto.randomUUID(),
+              name: part,
+              type: 'folder',
+              children: [],
+              path: currentPath,
+            };
+            folders.set(currentPath, folder);
+            parent.push(folder);
+          }
+          parent = folders.get(currentPath)!.children!;
+        }
+      }
+
+      const fileKeys = Array.from(fileMap.keys()).filter(k => !k.startsWith('__folder__')).sort();
+      for (const path of fileKeys) {
+        const file = fileMap.get(path)!;
+        const parts = path.split('/');
+        if (parts.length === 1) {
+          root.push(file);
+        } else {
+          let currentPath = '';
+          let parent: FileNode[] = root;
+          for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            if (!folders.has(currentPath)) {
+              const folder: FileNode = {
+                id: crypto.randomUUID(),
+                name: part,
+                type: 'folder',
+                children: [],
+                path: currentPath,
+              };
+              folders.set(currentPath, folder);
+              parent.push(folder);
+            }
+            parent = folders.get(currentPath)!.children!;
+          }
+          parent.push(file);
+        }
+      }
+
+      const sortNodes = (nodes: FileNode[]): FileNode[] =>
+        nodes
+          .sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          })
+          .map(node => {
+            if (node.children) node.children = sortNodes(node.children);
+            return node;
+          });
+
+      const tree = sortNodes(root);
+      const fileCount = fileKeys.length;
+      const folderCount = folderKeys.length;
+
+      if (tree.length > 0) {
+        onFilesLoaded(tree);
+        const parts = [];
+        if (fileCount > 0) parts.push(`${fileCount} files`);
+        if (folderCount > 0) parts.push(`${folderCount} folders`);
+        toast.success(`Loaded ${parts.join(' and ')}`);
+      } else {
+        toast.error('No supported files found');
+      }
+
+      // Reset input so re-selecting the same folder works
+      e.target.value = '';
+    })();
+  }, [onFilesLoaded]);
 
   return (
     <div
