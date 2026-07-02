@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Code2, PanelLeftClose, PanelLeft, MessageSquare, X, Search, Command, Wand2, Loader2, Download } from 'lucide-react';
+import { ArrowLeft, Code2, PanelLeftClose, PanelLeft, MessageSquare, X, Search, Command, Wand2, Loader2, Download, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { FileTree } from '@/components/ide/FileTree';
@@ -8,6 +8,7 @@ import { EditorTabs } from '@/components/ide/EditorTabs';
 import { CodeEditor } from '@/components/ide/CodeEditor';
 import { AIChat } from '@/components/ide/AIChat';
 import { FolderUpload } from '@/components/ide/FolderUpload';
+import { LivePreview } from '@/components/ide/LivePreview';
 import { CommandPalette } from '@/components/ide/CommandPalette';
 import { FileSearch } from '@/components/ide/FileSearch';
 import { StatusBar } from '@/components/ide/StatusBar';
@@ -28,6 +29,7 @@ export default function CodeIDE() {
   const [fileContents, setFileContents] = useState<Map<string, string>>(new Map());
   const [showSidebar, setShowSidebar] = useState(true);
   const [showAIChat, setShowAIChat] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
@@ -306,6 +308,21 @@ export default function CodeIDE() {
                 </TooltipTrigger>
                 <TooltipContent>Download project as ZIP</TooltipContent>
               </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showPreview ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setShowPreview(p => !p)}
+                    className="h-8"
+                  >
+                    <Eye className="h-4 w-4 mr-1.5" />
+                    Preview
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Live preview (HTML/CSS/JS)</TooltipContent>
+              </Tooltip>
             </>
           )}
 
@@ -379,7 +396,7 @@ export default function CodeIDE() {
             )}
 
             {/* Editor Area */}
-            <ResizablePanel defaultSize={showAIChat ? 52 : 82}>
+            <ResizablePanel defaultSize={showAIChat ? (showPreview ? 30 : 52) : (showPreview ? 45 : 82)}>
               <div className="h-full flex flex-col">
                 <EditorTabs
                   openFiles={openFiles}
@@ -408,6 +425,22 @@ export default function CodeIDE() {
                 </div>
               </div>
             </ResizablePanel>
+
+            {/* Live Preview */}
+            {showPreview && (
+              <>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={showAIChat ? 22 : 37} minSize={20}>
+                  <div className="h-full border-l border-border">
+                    <LivePreview
+                      files={files}
+                      fileContents={fileContents}
+                      activeFile={activeFile}
+                    />
+                  </div>
+                </ResizablePanel>
+              </>
+            )}
 
             {/* AI Chat */}
             {showAIChat && (
