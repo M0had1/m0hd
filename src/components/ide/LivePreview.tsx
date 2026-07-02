@@ -49,9 +49,29 @@ const mimeFor = (name: string): string => {
   return map[ext] || 'text/plain';
 };
 
-// Strip PHP blocks so a .php file at least previews its static HTML shell
-const stripPhp = (src: string) =>
-  src.replace(/<\?(?:php|=)?[\s\S]*?\?>/g, '<!-- php block removed for preview -->');
+// Strip PHP blocks so a .php file at least previews its static HTML shell.
+// Handles unclosed <?php ... (no ?> before EOF), which is common in pure-PHP files.
+const stripPhp = (src: string) => {
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const open = src.indexOf('<?', i);
+    if (open === -1) {
+      out += src.slice(i);
+      break;
+    }
+    out += src.slice(i, open);
+    const close = src.indexOf('?>', open + 2);
+    if (close === -1) {
+      // Unclosed PHP block — drop the rest of the file
+      out += '<!-- php block removed for preview -->';
+      break;
+    }
+    out += '<!-- php block removed for preview -->';
+    i = close + 2;
+  }
+  return out;
+};
 
 export const LivePreview = ({ files, fileContents, activeFile }: LivePreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
