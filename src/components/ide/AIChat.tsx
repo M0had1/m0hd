@@ -361,7 +361,7 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
                   {message.role === 'assistant' && !message.projectData && message.content.includes('```') && (
                     <Button size="sm" variant="outline" className="mt-2 text-xs h-7"
                       onClick={() => applyCodeFromMessage(message.content)}>
-                      <Code className="h-3 w-3 mr-1" />Apply changes
+                      <Code className="h-3 w-3 mr-1" />Review diff
                     </Button>
                   )}
                 </div>
@@ -384,6 +384,18 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
           </Button>
         </div>
       </div>
+
+      <DiffViewer
+        open={pendingDiff !== null}
+        onOpenChange={(open) => { if (!open) setPendingDiff(null); }}
+        fileName={activeFileName}
+        before={activeFileContent || ''}
+        after={pendingDiff || ''}
+        onApply={() => {
+          if (pendingDiff !== null) onApplyChanges(pendingDiff);
+          setPendingDiff(null);
+        }}
+      />
     </div>
   );
 };
