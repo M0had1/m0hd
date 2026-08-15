@@ -964,6 +964,65 @@ export const useChat = () => {
     }
   }, [abortController]);
 
+  // Delete every message in a conversation from a given timestamp onwards (DB + local state)
+  const truncateFrom = useCallback(async (conversationId: string, fromTimestamp: Date, keepIds: string[] = []) => {
+    setConversations(prev =>
+      prev.map(conv =>
+        conv.id === conversationId
+          ? {
+              ...conv,
+              messages: conv.messages.filter(
+                m => keepIds.includes(m.id) || new Date(m.timestamp).getTime() < fromTimestamp.getTime()
+              ),
+            }
+          : conv
+      )
+    );
+
+    try {
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .gte('created_at', new Date(fromTimestamp.getTime() - 1000).toISOString());
+    } catch (error) {
+      console.error('Error truncating messages:', error);
+    }
+  }, []);
+
+  // Re-run the assistant answer for the user message that preceded it
+  const regenerateResponse = useCallback(async (assistantMessageId: string) => {
+    const conversationId = activeConversationId;
+    if (!conversationId) return;
+    const conv = conversationsRef.current.find(c => c.id === conversationId);
+    if (!conv) return;
+
+    const index = conv.messages.findIndex(m => m.id === assistantMessageId);
+    if (index <= 0) return;
+
+    let userIndex = index - 1;
+    while (userIndex >= 0 && conv.messages[userIndex].role !== 'user') userIndex--;
+    if (userIndex < 0) return;
+
+    const userMessage = conv.messages[userIndex];
+    await truncateFrom(conversationId, new Date(userMessage.timestamp));
+    await sendMessage(userMessage.content);
+  }, [activeConversationId, sendMessage, truncateFrom]);
+
+  // Edit a user message and re-send it, discarding everything after it
+  const editAndResend = useCallback(async (messageId: string, newContent: string) => {
+    const conversationId = activeConversationId;
+    if (!conversationId || !newContent.trim()) return;
+    const conv = conversationsRef.current.find(c => c.id === conversationId);
+    if (!conv) return;
+
+    const target = conv.messages.find(m => m.id === messageId);
+    if (!target || target.role !== 'user') return;
+
+    await truncateFrom(conversationId, new Date(target.timestamp));
+    await sendMessage(newContent);
+  }, [activeConversationId, sendMessage, truncateFrom]);
+
   return {
     conversations,
     activeConversation,
@@ -977,5 +1036,7 @@ export const useChat = () => {
     clearAllConversations,
     sendMessage,
     stopGeneration,
+    regenerateResponse,
+    editAndResend,
   };
 };

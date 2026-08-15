@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getMemoriesForAI } from '@/lib/memories';
+import { getActivePersonaPrompt } from '@/hooks/usePersonas';
 
 export interface AISettings {
   tone: string;
@@ -129,6 +130,12 @@ export const useAISettings = () => {
     // Custom instructions
     if (settings.customInstructions.trim()) {
       parts.push(`Additional instructions from the user: ${settings.customInstructions}`);
+    }
+
+    // Active persona
+    const personaPrompt = getActivePersonaPrompt();
+    if (personaPrompt) {
+      parts.push(`Active persona instructions (highest priority for style): ${personaPrompt}`);
     }
 
     // Advanced capabilities

@@ -251,7 +251,7 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
 
   const applyCodeFromMessage = (content: string) => {
     const codeMatch = content.match(/```[\w]*\n([\s\S]*?)```/);
-    if (codeMatch) onApplyChanges(codeMatch[1].trim());
+    if (codeMatch) setPendingDiff(codeMatch[1].trim());
   };
 
   const loadProject = (projectData: ProjectData) => {

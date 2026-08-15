@@ -16,6 +16,8 @@ import Install from "./pages/Install";
 import SharedConversation from "./pages/SharedConversation";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
+import Insights from "./pages/Insights";
+import Compare from "./pages/Compare";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +89,22 @@ const App = () => (
                       <Admin />
                     </ProtectedRoute>
                   } 
+                />
+                <Route
+                  path="/insights"
+                  element={
+                    <ProtectedRoute>
+                      <Insights />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/compare"
+                  element={
+                    <ProtectedRoute>
+                      <Compare />
+                    </ProtectedRoute>
+                  }
                 />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

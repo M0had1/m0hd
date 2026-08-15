@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ShareDialog } from './ShareDialog';
 import { ExportMenu } from './ExportMenu';
 import { ModelSelector } from './ModelSelector';
+import { PersonaSelector } from './PersonaSelector';
 import { Conversation } from '@/types/chat';
 
 interface ChatHeaderProps {
@@ -39,6 +40,7 @@ export const ChatHeader = ({
             <TooltipContent side="bottom">{isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}</TooltipContent>
           </Tooltip>
           <ModelSelector />
+          <PersonaSelector />
         </div>
 
         <div className="flex items-center gap-1">

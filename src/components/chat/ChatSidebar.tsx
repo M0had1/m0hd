@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import logoImage from '@/assets/logo.jpg';
-import { Plus, MessageSquare, Trash2, Moon, Sun, Settings } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Moon, Sun, Settings, Pin, PinOff, Pencil, BarChart3, Columns2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Conversation } from '@/types/chat';
 import { UserMenu } from '@/components/UserMenu';
 import { ConversationSearch } from './ConversationSearch';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { usePinnedConversations } from '@/hooks/usePinnedConversations';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -21,6 +24,7 @@ interface ChatSidebarProps {
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onClearAllConversations?: () => void;
+  onRenameConversation?: (id: string, title: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
 }
@@ -52,13 +56,17 @@ const groupConversationsByDate = (conversations: Conversation[]) => {
 
 export const ChatSidebar = ({
   conversations, activeConversationId, onNewChat, onSelectConversation,
-  onDeleteConversation, onClearAllConversations, isDark, onToggleTheme,
+  onDeleteConversation, onClearAllConversations, onRenameConversation, isDark, onToggleTheme,
 }: ChatSidebarProps) => {
+  const navigate = useNavigate();
+  const { isPinned, togglePin } = usePinnedConversations();
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
 
   const filteredConversations = searchQuery.trim()
     ? conversations.filter(conv => {
@@ -68,7 +76,18 @@ export const ChatSidebar = ({
       })
     : conversations;
 
-  const groupedConversations = groupConversationsByDate(filteredConversations);
+  const pinnedConversations = filteredConversations.filter(c => isPinned(c.id));
+  const unpinnedConversations = filteredConversations.filter(c => !isPinned(c.id));
+  const groupedConversations = [
+    ...(pinnedConversations.length ? [{ label: 'Pinned', conversations: pinnedConversations }] : []),
+    ...groupConversationsByDate(unpinnedConversations),
+  ];
+
+  const commitRename = (id: string) => {
+    const next = renameDraft.trim();
+    setRenamingId(null);
+    if (next) onRenameConversation?.(id, next.slice(0, 80));
+  };
 
   const handleDeleteClick = (e: React.MouseEvent, conversationId: string) => {
     e.stopPropagation();
@@ -146,6 +165,20 @@ export const ChatSidebar = ({
                       )}
                       onClick={() => onSelectConversation(conversation.id)}
                     >
+                      {renamingId === conversation.id ? (
+                        <Input
+                          value={renameDraft}
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setRenameDraft(e.target.value)}
+                          onBlur={() => commitRename(conversation.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') commitRename(conversation.id);
+                            if (e.key === 'Escape') setRenamingId(null);
+                          }}
+                          className="h-7 flex-1 text-[0.8125rem]"
+                        />
+                      ) : (
                       <span className={cn(
                         "flex-1 truncate text-[0.8125rem]",
                         activeConversationId === conversation.id
@@ -154,9 +187,36 @@ export const ChatSidebar = ({
                       )}>
                         {conversation.title}
                       </span>
+                      )}
+                      {isPinned(conversation.id) && renamingId !== conversation.id && (
+                        <Pin className="h-3 w-3 shrink-0 text-primary" />
+                      )}
+                      {renamingId !== conversation.id && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={isPinned(conversation.id) ? 'Unpin conversation' : 'Pin conversation'}
+                            className="opacity-0 group-hover:opacity-100 h-6 w-6 shrink-0 rounded-lg transition-all"
+                            onClick={(e) => { e.stopPropagation(); togglePin(conversation.id); }}
+                          >
+                            {isPinned(conversation.id) ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Rename conversation"
+                            className="opacity-0 group-hover:opacity-100 h-6 w-6 shrink-0 rounded-lg transition-all"
+                            onClick={(e) => { e.stopPropagation(); setRenameDraft(conversation.title); setRenamingId(conversation.id); }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon-sm"
+                        aria-label="Delete conversation"
                         className="opacity-0 group-hover:opacity-100 h-6 w-6 shrink-0 hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all"
                         onClick={(e) => handleDeleteClick(e, conversation.id)}
                       >
@@ -172,6 +232,16 @@ export const ChatSidebar = ({
 
         {/* Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-1">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="flex-1 justify-start gap-2 h-8 text-xs" onClick={() => navigate('/compare')}>
+              <Columns2 className="h-3.5 w-3.5" />
+              Compare
+            </Button>
+            <Button variant="ghost" size="sm" className="flex-1 justify-start gap-2 h-8 text-xs" onClick={() => navigate('/insights')}>
+              <BarChart3 className="h-3.5 w-3.5" />
+              Insights
+            </Button>
+          </div>
           {conversations.length > 0 && (
             <Button variant="ghost" size="sm" className="w-full justify-start gap-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 h-8 text-xs" onClick={() => setClearAllDialogOpen(true)}>
               <Trash2 className="h-3.5 w-3.5" />

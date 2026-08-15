@@ -1,7 +1,8 @@
-import { User, Copy, Check, RefreshCw, FileText, AlertCircle, Download } from 'lucide-react';
+import { User, Copy, Check, RefreshCw, FileText, AlertCircle, Download, Pencil, X } from 'lucide-react';
 import { useState } from 'react';
 import { Message } from '@/types/chat';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTypingEffect } from '@/hooks/useTypingEffect';
@@ -10,11 +11,25 @@ import logoImg from '@/assets/logo.jpg';
 interface ChatMessageProps {
   message: Message;
   onRegenerate?: () => void;
+  onEdit?: (newContent: string) => void;
 }
 
-export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
+export const ChatMessage = ({ message, onRegenerate, onEdit }: ChatMessageProps) => {
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
   const isUser = message.role === 'user';
+
+  const startEditing = () => {
+    setDraft(message.content);
+    setIsEditing(true);
+  };
+
+  const submitEdit = () => {
+    const next = draft.trim();
+    setIsEditing(false);
+    if (next && next !== message.content) onEdit?.(next);
+  };
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -181,6 +196,32 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
 
         {isUser && <div className="flex justify-end">{renderAttachments()}</div>}
 
+        {isUser && isEditing ? (
+          <div className="space-y-2">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  submitEdit();
+                }
+                if (e.key === 'Escape') setIsEditing(false);
+              }}
+              rows={3}
+              className="resize-none rounded-2xl text-left"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                <X className="mr-1 h-3 w-3" /> Cancel
+              </Button>
+              <Button size="sm" onClick={submitEdit} disabled={!draft.trim()}>
+                Save &amp; resend
+              </Button>
+            </div>
+          </div>
+        ) : (
         <div className={cn(
           "text-foreground rounded-2xl",
           !isUser && "bg-muted/30 px-4 py-3 sm:mr-4 lg:mr-8 border border-border/30",
@@ -188,8 +229,20 @@ export const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
         )}>
           {renderContent()}
         </div>
+        )}
 
         {/* Actions */}
+        {isUser && onEdit && !isEditing && (
+          <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pt-1">
+            <Button variant="ghost" size="icon-sm" aria-label="Copy message" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={copyToClipboard}>
+              {copied ? <Check className="h-3 w-3 text-accent" /> : <Copy className="h-3 w-3" />}
+            </Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Edit message" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={startEditing}>
+              <Pencil className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
         {!isUser && !message.isStreaming && (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pt-1">
             <Button variant="ghost" size="icon-sm" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={copyToClipboard}>
