@@ -7,6 +7,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { VoiceCallOverlay } from '@/components/chat/VoiceCallOverlay';
 import { OfflineBanner } from '@/components/chat/OfflineBanner';
+import { ChatCommandPalette } from '@/components/chat/ChatCommandPalette';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useChat } from '@/hooks/useChat';
@@ -34,10 +35,13 @@ const Index = () => {
     isLoading,
     setActiveConversationId,
     createNewConversation,
+    updateConversationTitle,
     deleteConversation,
     clearAllConversations,
     sendMessage,
     stopGeneration,
+    regenerateResponse,
+    editAndResend,
   } = useChat();
 
   // Handle voice transcript - send message when user speaks
@@ -112,6 +116,7 @@ const Index = () => {
       onSelectConversation={handleSelectConversation}
       onDeleteConversation={deleteConversation}
       onClearAllConversations={clearAllConversations}
+      onRenameConversation={updateConversationTitle}
       isDark={isDark}
       onToggleTheme={toggleTheme}
     />
@@ -119,6 +124,14 @@ const Index = () => {
 
   return (
     <div className="flex h-[100dvh] bg-background overflow-hidden">
+      <ChatCommandPalette
+        conversations={conversations}
+        onSelectConversation={handleSelectConversation}
+        onNewChat={handleNewChat}
+        onToggleTheme={toggleTheme}
+        isDark={isDark}
+      />
+
       {/* Desktop Sidebar */}
       {!isMobile && (
         <div
@@ -159,7 +172,20 @@ const Index = () => {
           <ScrollArea className="flex-1">
             <div className="max-w-5xl xl:max-w-6xl mx-auto px-2 sm:px-4">
               {activeConversation.messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  onRegenerate={
+                    message.role === 'assistant' && !isLoading
+                      ? () => regenerateResponse(message.id)
+                      : undefined
+                  }
+                  onEdit={
+                    message.role === 'user' && !isLoading
+                      ? (newContent) => editAndResend(message.id, newContent)
+                      : undefined
+                  }
+                />
               ))}
               <div ref={messagesEndRef} />
             </div>

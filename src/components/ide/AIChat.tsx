@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { FileNode, getLanguageFromFilename } from '@/types/ide';
+import { DiffViewer } from '@/components/ide/DiffViewer';
 
 interface Message {
   id: string;
@@ -121,6 +122,7 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -251,7 +253,7 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
 
   const applyCodeFromMessage = (content: string) => {
     const codeMatch = content.match(/```[\w]*\n([\s\S]*?)```/);
-    if (codeMatch) onApplyChanges(codeMatch[1].trim());
+    if (codeMatch) setPendingDiff(codeMatch[1].trim());
   };
 
   const loadProject = (projectData: ProjectData) => {
@@ -359,7 +361,7 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
                   {message.role === 'assistant' && !message.projectData && message.content.includes('```') && (
                     <Button size="sm" variant="outline" className="mt-2 text-xs h-7"
                       onClick={() => applyCodeFromMessage(message.content)}>
-                      <Code className="h-3 w-3 mr-1" />Apply changes
+                      <Code className="h-3 w-3 mr-1" />Review diff
                     </Button>
                   )}
                 </div>
@@ -382,6 +384,18 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
           </Button>
         </div>
       </div>
+
+      <DiffViewer
+        open={pendingDiff !== null}
+        onOpenChange={(open) => { if (!open) setPendingDiff(null); }}
+        fileName={activeFileName}
+        before={activeFileContent || ''}
+        after={pendingDiff || ''}
+        onApply={() => {
+          if (pendingDiff !== null) onApplyChanges(pendingDiff);
+          setPendingDiff(null);
+        }}
+      />
     </div>
   );
 };
