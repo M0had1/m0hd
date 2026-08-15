@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { FileNode, getLanguageFromFilename } from '@/types/ide';
+import { DiffViewer } from '@/components/ide/DiffViewer';
 
 interface Message {
   id: string;
@@ -121,6 +122,7 @@ export const AIChat = ({ activeFileContent, activeFileName, existingFiles, onApp
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
